@@ -1,10 +1,54 @@
-# Getting Started with Create React App
+# Resume Improvement Tool
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This application helps users improve their resume bullet points using Claude AI. It provides AI-powered suggestions to enhance resume content.
+
+## Project Structure
+
+The project consists of two main parts:
+
+1. **Client** - React frontend application
+2. **Server** - Express backend server that handles Claude API calls
+
+## Setup Instructions
+
+### 1. Server Setup
+
+First, set up the backend server:
+
+```bash
+# Navigate to the server directory
+cd server
+
+# Install dependencies
+npm install
+
+# Start the server
+npm run dev
+```
+
+The server will run on http://localhost:3001.
+
+### 2. Client Setup
+
+Then, set up the frontend client:
+
+```bash
+# Return to the main project directory
+cd ..
+
+# Install dependencies
+npm install
+
+# Start the client
+npm start
+```
+
+The client will run on http://localhost:3000.
+
 
 ## Available Scripts
 
-In the project directory, you can run:
+In the client directory, you can run:
 
 ### `npm start`
 
