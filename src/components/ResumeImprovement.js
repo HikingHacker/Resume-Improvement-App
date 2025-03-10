@@ -867,44 +867,47 @@ const ResumeImprovement = () => {
                 </p>
               </div>
               
-              <div className="overflow-auto max-h-[45vh] p-4">
-                <div className="space-y-6">
-                  {/* Job Selection First - Compact Version */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Select a Job Position:</h4>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {currentJobIndex !== null ? 
-                          `${jobs[currentJobIndex]?.position} at ${jobs[currentJobIndex]?.company} selected` : 
-                          "No position selected"}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {jobs.map((job, jobIndex) => (
-                        <button 
-                          key={jobIndex}
-                          onClick={() => setCurrentJobIndex(jobIndex)}
-                          className={`
-                            py-1 px-3 rounded-full text-sm border transition-colors flex items-center
-                            ${currentJobIndex === jobIndex 
-                              ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
-                              : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
-                            }
-                          `}
-                          title={`${job.position} at ${job.company}${job.time_period ? ` (${job.time_period})` : ''}`}
-                        >
-                          <span className="truncate max-w-[150px]">{job.company}</span>
-                          {currentJobIndex === jobIndex && (
-                            <CheckCircle className="w-3.5 h-3.5 ml-1 text-primary-600 dark:text-primary-400" />
-                          )}
-                          <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">
-                            {job.achievements?.length || 0}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+              {/* Static Job Selection Header - Always Visible */}
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850">
+                <div className="mb-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Select a Job Position:</h4>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {currentJobIndex !== null ? 
+                        `${jobs[currentJobIndex]?.position} at ${jobs[currentJobIndex]?.company} selected` : 
+                        "No position selected"}
+                    </span>
                   </div>
-                  
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {jobs.map((job, jobIndex) => (
+                      <button 
+                        key={jobIndex}
+                        onClick={() => setCurrentJobIndex(jobIndex)}
+                        className={`
+                          py-1 px-3 rounded-full text-sm border transition-colors flex items-center
+                          ${currentJobIndex === jobIndex 
+                            ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                            : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                          }
+                        `}
+                        title={`${job.position} at ${job.company}${job.time_period ? ` (${job.time_period})` : ''}`}
+                      >
+                        <span className="truncate max-w-[150px]">{job.company}</span>
+                        {currentJobIndex === jobIndex && (
+                          <CheckCircle className="w-3.5 h-3.5 ml-1 text-primary-600 dark:text-primary-400" />
+                        )}
+                        <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">
+                          {job.achievements?.length || 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Scrollable Bullet Points Section */}
+              <div className="overflow-auto max-h-[35vh] p-4">
+                <div className="space-y-6">
                   {/* Bullet Points Only Shown After Job Selection */}
                   {currentJobIndex !== null && (
                     <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm">
