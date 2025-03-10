@@ -93,8 +93,8 @@ const ConfirmationModal = ({ isOpen, onConfirm, onCancel }) => {
 // Navigation steps component
 const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStepCompleted }) => {
   return (
-    <div className="w-full mb-8">
-      <div className="flex items-center">
+    <div className="w-full mb-8 flex justify-center">
+      <div className="flex items-center max-w-4xl w-full">
         {steps.map((step, index) => {
           const isActive = currentStep === step.value;
           const isDisabled = disabled.includes(step.value);
@@ -843,7 +843,7 @@ const ResumeImprovement = () => {
                 </p>
               </div>
               
-              <div className="overflow-auto max-h-[40vh] p-4">
+              <div className="overflow-auto max-h-[45vh] p-4">
                 <div className="space-y-6">
                   {jobs.map((job, jobIndex) => (
                     <div key={jobIndex} className="space-y-4">
@@ -1052,35 +1052,57 @@ const ResumeImprovement = () => {
                             className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 focus:border-green-300 dark:focus:border-green-700"
                           />
                         </div>
-                        <Button
-                          onClick={() => {
-                            // Update the resume data with the improved bullet point
-                            const updatedJobs = [...resumeData.bullet_points];
-                            updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
-                            setResumeData({...resumeData, bullet_points: updatedJobs});
-                            
-                            // Mark this bullet as saved
-                            setSavedBullets({...savedBullets, [bulletId]: true});
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            onClick={() => {
+                              // Update the resume data with the improved bullet point
+                              const updatedJobs = [...resumeData.bullet_points];
+                              updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
+                              setResumeData({...resumeData, bullet_points: updatedJobs});
+                              
+                              // Mark this bullet as saved
+                              setSavedBullets({...savedBullets, [bulletId]: true});
 
-                            // Show a temporary success message
-                            const tempMessage = document.createElement('div');
-                            tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
-                            tempMessage.innerHTML = 'Bullet point updated successfully!';
-                            document.getElementById('save-button-container').appendChild(tempMessage);
-                            
-                            // Remove the message after 3 seconds
-                            setTimeout(() => {
-                              if (tempMessage.parentNode) {
-                                tempMessage.parentNode.removeChild(tempMessage);
-                              }
-                            }, 3000);
-                          }}
-                          variant="secondary"
-                          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Save Improved Version
-                        </Button>
+                              // Show a temporary success message
+                              const tempMessage = document.createElement('div');
+                              tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
+                              tempMessage.innerHTML = 'Bullet point updated successfully!';
+                              document.getElementById('save-button-container').appendChild(tempMessage);
+                              
+                              // Remove the message after 3 seconds
+                              setTimeout(() => {
+                                if (tempMessage.parentNode) {
+                                  tempMessage.parentNode.removeChild(tempMessage);
+                                }
+                              }, 3000);
+                            }}
+                            variant="secondary"
+                            className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Save Improved Version
+                          </Button>
+                          
+                          <Button
+                            onClick={() => {
+                              // Save the current bullet point
+                              const updatedJobs = [...resumeData.bullet_points];
+                              updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
+                              setResumeData({...resumeData, bullet_points: updatedJobs});
+                              
+                              // Mark this bullet as saved
+                              setSavedBullets({...savedBullets, [bulletId]: true});
+                              
+                              // Navigate to next bullet point
+                              navigateBulletPoints('next');
+                            }}
+                            variant="primary"
+                            className="bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-600 text-white"
+                          >
+                            <ArrowRight className="w-4 h-4 mr-2" />
+                            Save & Next Bullet
+                          </Button>
+                        </div>
                         <div id="save-button-container" className="mt-2"></div>
                       </div>
                       
@@ -1315,7 +1337,7 @@ const ResumeImprovement = () => {
             <span className="text-sm text-gray-500 dark:text-gray-400">Click any field to edit</span>
           </div>
           
-          <div className="space-y-6 max-h-96 overflow-y-auto pr-2">
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
             {resumeData.bullet_points.map((job, jobIndex) => (
               <div key={jobIndex} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
                 {/* Job details section */}
@@ -1462,6 +1484,7 @@ const ResumeImprovement = () => {
       getResumeAnalysis();
     }
   }, [step, resumeAnalysis, resumeData]);
+  
 
   // New function to render the resume analysis screen
   const renderResumeAnalysis = () => {
@@ -2114,7 +2137,7 @@ const ResumeImprovement = () => {
         
         {/* Navigation steps - only show if we're past feature selection */}
         {step > 0 && (
-          <div className="w-full px-2 mb-6 mt-2 animate-fade-in max-w-[90vw] lg:max-w-6xl xl:max-w-7xl">
+          <div className="w-full px-2 mb-6 mt-2 animate-fade-in">
             <StepNavigation 
               currentStep={step} 
               steps={navigationSteps.slice(1)} // Skip feature selection step in nav

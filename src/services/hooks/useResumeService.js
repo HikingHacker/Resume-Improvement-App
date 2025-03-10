@@ -124,7 +124,9 @@ export const useResumeService = () => {
 
   return {
     loading,
+    setLoading,
     errors,
+    setErrors,
     parseResume,
     getAISuggestions,
     analyzeResume,

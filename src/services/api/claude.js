@@ -89,8 +89,8 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     5. Ensuring conciseness (ideally under 2 lines)
     
     Respond with ONLY a JSON object containing the following fields:
-    - improvedBulletPoint: The enhanced version of the bullet point
-    - reasoning: Brief explanation of the improvements you made
+    - multipleSuggestions: An array of 3 distinct improved versions of the bullet point, each offering a different approach or emphasis
+    - reasoning: Brief explanation of the improvements you made in general
     - followUpQuestions: An array of 3 questions to elicit more information that could further improve the bullet point
   `;
 
@@ -119,7 +119,8 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     
     return {
       success: true,
-      improvedBulletPoint: parsedResponse.improvedBulletPoint,
+      multipleSuggestions: parsedResponse.multipleSuggestions || [],
+      improvedBulletPoint: parsedResponse.multipleSuggestions ? parsedResponse.multipleSuggestions[0] : parsedResponse.improvedBulletPoint,
       reasoning: parsedResponse.reasoning,
       followUpQuestions: parsedResponse.followUpQuestions
     };

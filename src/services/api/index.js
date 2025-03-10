@@ -386,10 +386,18 @@ function mockImproveResume(data) {
   
   // If specific bullet point and context are provided, customize response
   if (bulletPoint && additionalContext) {
+    // Create sample bullet point variations
+    const sampleText = "Engineered high-performance web applications using React and Node.js, implementing optimization techniques that boosted website speed by 40% and enhanced user experience";
+    
     return {
       success: true,
-      improvedBulletPoint: "Engineered high-performance web applications using React and Node.js, implementing optimization techniques that boosted website speed by 40% and enhanced user experience",
-      reasoning: "The improved version uses a stronger action verb (Engineered), quantifies the achievement (40% speed boost), highlights specific technologies (React and Node.js), and emphasizes the impact (enhanced user experience). It's also kept concise within two lines.",
+      multipleSuggestions: [
+        sampleText,
+        "Developed React and Node.js web applications with a focus on performance, delivering a 40% speed improvement that significantly increased user engagement",
+        "Architected and implemented performance enhancements for web applications using React and Node.js, reducing load times by 40% across all platforms"
+      ],
+      improvedBulletPoint: sampleText,
+      reasoning: "The improved versions use stronger action verbs, quantify achievements, highlight specific technologies, and emphasize the impact. Each variation presents a slightly different focus while maintaining conciseness.",
       followUpQuestions: [
         "Can you provide more details about the specific optimization techniques used?",
         "Were there any particular challenges you faced during this project?",
@@ -399,10 +407,17 @@ function mockImproveResume(data) {
   }
   
   // Default generic response
+  const defaultImprovement = "Engineered and maintained web applications using React and Node.js, implementing best practices for code organization and performance";
+  
   return {
     success: true,
-    improvedBulletPoint: "Engineered and maintained web applications using React and Node.js, implementing best practices for code organization and performance",
-    reasoning: "Used stronger action verb and highlighted technical skills",
+    multipleSuggestions: [
+      defaultImprovement,
+      "Developed responsive React applications with Node.js backends, following industry best practices for maintainable and efficient code",
+      "Built and maintained full-stack web solutions with React and Node.js, focusing on performance optimization and clean architecture"
+    ],
+    improvedBulletPoint: defaultImprovement,
+    reasoning: "Used stronger action verbs and highlighted technical skills while emphasizing best practices",
     followUpQuestions: [
       "What specific features did you implement?",
       "What was the impact of your work?",
