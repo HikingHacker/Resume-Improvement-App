@@ -203,8 +203,12 @@ const ResumeImprovement = () => {
     const file = event.target.files[0];
     if (file) {
       try {
-        // Reset resumeAnalysis when a new file is uploaded
+        // Reset all state related to the resume when a new file is uploaded
         setResumeAnalysis(null);
+        setCurrentJobIndex(null);
+        setCurrentBulletIndex(null);
+        setImprovements({});
+        setSavedBullets({});
         
         const result = await parseResume(file);
         console.log("Resume parsing result:", result);
@@ -922,7 +926,10 @@ const ResumeImprovement = () => {
                       return (
                         <button 
                           key={jobIndex}
-                          onClick={() => setCurrentJobIndex(jobIndex)}
+                          onClick={() => {
+                            setCurrentJobIndex(jobIndex);
+                            setCurrentBulletIndex(0); // Always select the first bullet point
+                          }}
                           className={`
                             py-1 px-3 rounded-full text-sm border transition-colors flex items-center
                             ${currentJobIndex === jobIndex 
