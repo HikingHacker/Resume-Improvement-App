@@ -174,6 +174,7 @@ const ResumeImprovement = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [resumeAnalysis, setResumeAnalysis] = useState(null);
   const [savedBullets, setSavedBullets] = useState({});
+  const [resumeEdited, setResumeEdited] = useState(false);
   
   // State for editing job details in overview
   const [editingJobIndex, setEditingJobIndex] = useState(null);
@@ -202,6 +203,9 @@ const ResumeImprovement = () => {
     const file = event.target.files[0];
     if (file) {
       try {
+        // Reset resumeAnalysis when a new file is uploaded
+        setResumeAnalysis(null);
+        
         const result = await parseResume(file);
         console.log("Resume parsing result:", result);
         
@@ -241,6 +245,7 @@ const ResumeImprovement = () => {
           return;
         }
         
+        setResumeEdited(false); // Reset edit flag on new upload
         setStep(2); // Go to resume overview page (now step 2)
       } catch (error) {
         console.error("Error parsing resume:", error);
@@ -1480,10 +1485,18 @@ const ResumeImprovement = () => {
 
   // Effect to trigger analysis when reaching the analysis step
   React.useEffect(() => {
-    if (step === 2.5 && !resumeAnalysis) {
+    // Only analyze if we're on the analysis step AND either:
+    // 1. We don't have an analysis yet, OR
+    // 2. The resume was edited (flag set elsewhere in the code)
+    if (step === 2.5 && (!resumeAnalysis || resumeEdited)) {
       getResumeAnalysis();
+      
+      // Reset the edited flag after triggering a re-analysis
+      if (resumeEdited) {
+        setResumeEdited(false);
+      }
     }
-  }, [step, resumeAnalysis, resumeData]);
+  }, [step, resumeAnalysis, resumeEdited, resumeData]);
   
 
   // New function to render the resume analysis screen
