@@ -166,13 +166,14 @@ const ResumeImprovement = () => {
   const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 4: final review
   const [resumeData, setResumeData] = useState({ bullet_points: [] });
   const [flatBulletPoints, setFlatBulletPoints] = useState([]);
-  const [currentJobIndex, setCurrentJobIndex] = useState(0);
-  const [currentBulletIndex, setCurrentBulletIndex] = useState(0);
+  const [currentJobIndex, setCurrentJobIndex] = useState(null);
+  const [currentBulletIndex, setCurrentBulletIndex] = useState(null);
   const [improvements, setImprovements] = useState({});
   const [additionalContexts, setAdditionalContexts] = useState({});
   const [showFollowUpForBullets, setShowFollowUpForBullets] = useState({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [resumeAnalysis, setResumeAnalysis] = useState(null);
+  const [savedBullets, setSavedBullets] = useState({});
   
   // State for editing job details in overview
   const [editingJobIndex, setEditingJobIndex] = useState(null);
@@ -184,8 +185,8 @@ const ResumeImprovement = () => {
     setStep(0);
     setResumeData({ bullet_points: [] });
     setFlatBulletPoints([]);
-    setCurrentJobIndex(0);
-    setCurrentBulletIndex(0);
+    setCurrentJobIndex(null);
+    setCurrentBulletIndex(null);
     setImprovements({});
     setAdditionalContexts({});
     setShowFollowUpForBullets({});
@@ -194,6 +195,7 @@ const ResumeImprovement = () => {
     setEditingBulletInfo({ jobIndex: null, bulletIndex: null });
     setEditedBullet("");
     setResumeAnalysis(null);
+    setSavedBullets({});
   };
 
   const handleFileUpload = async (event) => {
@@ -319,7 +321,7 @@ const ResumeImprovement = () => {
   // Get the current bullet point based on job and bullet indices
   const getCurrentBulletPoint = () => {
     const jobs = resumeData.bullet_points;
-    if (jobs.length === 0) return null;
+    if (jobs.length === 0 || currentJobIndex === null || currentBulletIndex === null) return null;
     
     const currentJob = jobs[currentJobIndex];
     if (!currentJob || !currentJob.achievements || currentJob.achievements.length === 0) return null;
@@ -333,6 +335,7 @@ const ResumeImprovement = () => {
   };
 
   const getCurrentBulletId = () => {
+    if (currentJobIndex === null || currentBulletIndex === null) return null;
     return getBulletId(currentJobIndex, currentBulletIndex);
   };
 
@@ -407,6 +410,13 @@ const ResumeImprovement = () => {
   const navigateBulletPoints = (direction) => {
     const jobs = resumeData.bullet_points;
     if (jobs.length === 0) return;
+    
+    // If no current selection, select the first bullet of the first job
+    if (currentJobIndex === null || currentBulletIndex === null) {
+      setCurrentJobIndex(0);
+      setCurrentBulletIndex(0);
+      return;
+    }
     
     const currentJob = jobs[currentJobIndex];
     if (!currentJob || !currentJob.achievements) return;
@@ -526,11 +536,30 @@ const ResumeImprovement = () => {
       }
     } else if (direction === 'forward') {
       if (step === 3) {
-        navigateBulletPoints('next');
+        // If we're in the bullet improvement step and there's no selection yet,
+        // select the first bullet point of the first job
+        if (currentJobIndex === null || currentBulletIndex === null) {
+          const jobs = resumeData.bullet_points;
+          if (jobs.length > 0) {
+            setCurrentJobIndex(0);
+            setCurrentBulletIndex(0);
+          }
+        } else {
+          navigateBulletPoints('next');
+        }
       } else if (step < 4) {
         // Handle special case for floating point step
         if (step === 2.5) {
           setStep(3);
+          
+          // Initialize selection to first bullet if needed
+          if (currentJobIndex === null || currentBulletIndex === null) {
+            const jobs = resumeData.bullet_points;
+            if (jobs.length > 0) {
+              setCurrentJobIndex(0);
+              setCurrentBulletIndex(0);
+            }
+          }
         } else {
           setStep(step + 1);
         }
@@ -762,15 +791,16 @@ const ResumeImprovement = () => {
     if (!jobs || jobs.length === 0) {
       console.error("No resume data found");
       return (
-        <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-2xl">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md w-full max-w-2xl">
           <h2 className="text-xl font-bold mb-4">No Resume Data Found</h2>
-          <p className="text-red-500">
+          <p className="text-red-500 dark:text-red-400">
             The resume parser couldn't extract any bullet points from your resume. 
             Please try uploading again or use a different file format.
           </p>
           <Button 
             onClick={() => setStep(0)} 
-            className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+            variant="primary"
+            className="mt-4"
           >
             Return to Upload
           </Button>
@@ -778,162 +808,346 @@ const ResumeImprovement = () => {
       );
     }
     
-    // Ensure currentJobIndex is valid
-    if (currentJobIndex >= jobs.length) {
-      console.log("Invalid job index, resetting to 0");
-      setCurrentJobIndex(0);
-    }
+    // Get the current bullet ID if we have one selected
+    const bulletId = currentJobIndex !== null && currentBulletIndex !== null ? 
+      getBulletId(currentJobIndex, currentBulletIndex) : null;
     
-    const currentJob = jobs[currentJobIndex];
-    if (!currentJob) {
-      console.error("No job data found for index", currentJobIndex);
-      return (
-        <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-2xl">
-          <h2 className="text-xl font-bold mb-4">Job Data Not Found</h2>
-          <p className="text-red-500">
-            The selected job position couldn't be found. This may be due to an error in resume parsing.
-          </p>
-          <Button 
-            onClick={() => setStep(0)} 
-            className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-          >
-            Return to Upload
-          </Button>
-        </div>
-      );
-    }
-    
-    // If no achievements for the current job, add a placeholder
-    if (!currentJob.achievements || currentJob.achievements.length === 0) {
-      console.log("No achievements found for job, adding placeholder");
-      currentJob.achievements = ["No bullet points were extracted for this position. Consider adding some manually."];
-    }
-    
-    // Ensure currentBulletIndex is valid
-    if (currentBulletIndex >= currentJob.achievements.length) {
-      console.log("Invalid bullet index, resetting to 0");
-      setCurrentBulletIndex(0);
-    }
-    
-    const currentBullet = getCurrentBulletPoint();
-    if (!currentBullet) {
-      console.error("No bullet point found");
-      return (
-        <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-2xl">
-          <h2 className="text-xl font-bold mb-4">No Bullet Points Found</h2>
-          <p className="text-red-500">
-            No bullet points were found for this job position. Please try uploading a different resume.
-          </p>
-          <Button 
-            onClick={() => setStep(0)} 
-            className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-          >
-            Return to Upload
-          </Button>
-        </div>
-      );
-    }
-    
-    console.log("Rendering bullet improvement for:", currentBullet);
-    const bulletId = getCurrentBulletId();
     const totalBullets = getTotalBulletPoints();
-    const currentBulletNumber = getCurrentBulletPointNumber();
     
     return (
-      <Card className="w-full shadow-md p-6 transition-colors duration-200">
+      <Card className="w-full shadow-md transition-colors duration-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl">Improve Your Bullet Points</CardTitle>
+          <CardDescription>
+            Review and enhance each bullet point with AI-powered suggestions
+          </CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Progress indicators */}
+          {/* Progress indicator */}
           {renderProgressBar()}
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Bullet Point {currentBulletNumber} of {totalBullets} total
+            {totalBullets} bullet points total
           </p>
           
-          {/* Job-Level Navigation */}
-          {renderJobNavigation()}
-          
-          {/* Current job card */}
-          {renderJobCard(currentJob)}
-          
-          {/* Bullet navigation within current job */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-medium text-gray-700 dark:text-gray-300">Bullet Points:</h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {currentBulletIndex + 1} of {currentJob.achievements.length}
-              </span>
+          <div className="space-y-6">
+            {/* Job & Bullet points section in a scrollable container */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center">
+                  <Briefcase className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+                  Job History & Bullet Points
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Select a bullet point to get AI improvement suggestions
+                </p>
+              </div>
+              
+              <div className="overflow-auto max-h-[40vh] p-4">
+                <div className="space-y-6">
+                  {jobs.map((job, jobIndex) => (
+                    <div key={jobIndex} className="space-y-4">
+                      {/* Job Card */}
+                      <div 
+                        className={`
+                          rounded-lg border p-4 transition-colors
+                          ${editingJobIndex === jobIndex ? 
+                            'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' :
+                            'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80'
+                          }
+                        `}
+                      >
+                        {/* Job details section */}
+                        {editingJobIndex === jobIndex ? (
+                          <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                            <div className="mb-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position</label>
+                              <Input 
+                                type="text" 
+                                value={editingJob.position}
+                                onChange={(e) => setEditingJob({...editingJob, position: e.target.value})}
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company</label>
+                              <Input 
+                                type="text" 
+                                value={editingJob.company}
+                                onChange={(e) => setEditingJob({...editingJob, company: e.target.value})}
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Period</label>
+                              <Input 
+                                type="text" 
+                                value={editingJob.time_period || ""}
+                                onChange={(e) => setEditingJob({...editingJob, time_period: e.target.value})}
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button 
+                                onClick={saveEditedJob} 
+                                variant="secondary"
+                                size="sm"
+                              >
+                                Save Changes
+                              </Button>
+                              <Button 
+                                onClick={() => {setEditingJobIndex(null); setEditingJob(null);}} 
+                                variant="ghost"
+                                size="sm"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div 
+                            className="mb-3 cursor-pointer" 
+                            onClick={() => startEditingJob(jobIndex)}
+                          >
+                            <div className="flex items-start">
+                              <div className="bg-primary-100 dark:bg-primary-900 p-2 rounded-full mr-3">
+                                <Building className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">{job.company}</h3>
+                                <div className="flex items-center">
+                                  <Job className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
+                                  <span className="text-gray-700 dark:text-gray-300">{job.position}</span>
+                                </div>
+                                {job.time_period && (
+                                  <div className="flex items-center">
+                                    <Calendar className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
+                                    <span className="text-gray-700 dark:text-gray-300">{job.time_period}</span>
+                                  </div>
+                                )}
+                                <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">Click to edit details</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Bullet Points */}
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bullet Points:</h4>
+                          {job.achievements?.map((bullet, bulletIndex) => {
+                            const isSelected = currentJobIndex === jobIndex && currentBulletIndex === bulletIndex;
+                            const thisBulletId = getBulletId(jobIndex, bulletIndex);
+                            const hasImprovement = improvements[thisBulletId]?.improvedBulletPoint;
+                            const isSaved = savedBullets[thisBulletId];
+                            
+                            return (
+                              <div 
+                                key={bulletIndex} 
+                                className={`
+                                  p-3 rounded-md border transition-colors cursor-pointer relative
+                                  ${isSelected 
+                                    ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
+                                    : isSaved
+                                      ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                                      : hasImprovement
+                                        ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/10'
+                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                  }
+                                `}
+                                onClick={() => {
+                                  setCurrentJobIndex(jobIndex);
+                                  setCurrentBulletIndex(bulletIndex);
+                                }}
+                              >
+                                <p className="text-sm text-gray-800 dark:text-gray-200">{bullet}</p>
+                                
+                                {isSaved && !isSelected && (
+                                  <div className="absolute top-2 right-2">
+                                    <div className="bg-green-100 dark:bg-green-800 p-1 rounded-full">
+                                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {hasImprovement && !isSaved && !isSelected && (
+                                  <div className="absolute top-2 right-2">
+                                    <div className="bg-yellow-100 dark:bg-yellow-800 p-1 rounded-full">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            {renderBulletNavigation()}
-          </div>
-          
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Original Bullet Point:</h3>
-            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-              {currentBullet}
-            </div>
-          </div>
-          
-          <Button 
-            onClick={handleBulletPointImprovement} 
-            variant="primary"
-            loading={loading.improve}
-            className="w-full sm:w-auto"
-          >
-            {loading.improve ? 'Processing...' : 'Get AI Suggestions'}
-          </Button>
-          
-          {errors.improve && (
-            <div className="text-red-500 dark:text-red-400 p-3 bg-red-50 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">{errors.improve}</div>
-          )}
-          
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Improved Version:</h3>
-            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded border border-green-200 dark:border-green-800 text-gray-800 dark:text-gray-200">
-              {improvements[bulletId]?.improvedBulletPoint || "AI suggestions will appear here after you click 'Get AI Suggestions'."}
-            </div>
-          </div>
-          
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Reasoning:</h3>
-            <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded border border-primary-200 dark:border-primary-800 text-gray-800 dark:text-gray-200">
-              {improvements[bulletId]?.reasoning || "The AI's reasoning for the improvements will be shown here."}
-            </div>
-          </div>
-          
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Follow-up Questions:</h3>
-            {showFollowUpForBullets[bulletId] && improvements[bulletId]?.followUpQuestions ? (
-              <div className="space-y-4">
-                {improvements[bulletId].followUpQuestions.map((question, index) => (
-                  <div key={index} className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
-                    <p className="text-gray-800 dark:text-gray-200 mb-2">{question}</p>
-                    <Textarea
-                      label="Your response"
-                      placeholder="Provide additional context..."
-                      value={additionalContexts[bulletId]?.[index] || ""}
-                      onChange={(e) => handleAdditionalContextChange(index, e.target.value)}
-                      rows={3}
-                    />
+            
+            {/* AI Improvement UI */}
+            <div className={`
+              border rounded-lg shadow-sm overflow-hidden
+              ${bulletId && improvements[bulletId] ? 'border-green-200 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}
+            `}>
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center">
+                  <Sparkles className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+                  AI Improvement Suggestions
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {improvements[bulletId] 
+                    ? "Review the AI-enhanced version of your bullet point" 
+                    : "Select a bullet point and get AI-powered improvements"}
+                </p>
+              </div>
+              <div className="p-5 divide-y divide-gray-200 dark:divide-gray-700">
+              {currentJobIndex !== null && currentBulletIndex !== null ? (
+                <>
+                  <div className="pb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Original Bullet Point</h3>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
+                      {jobs[currentJobIndex]?.achievements?.[currentBulletIndex] || "No bullet point selected"}
+                    </div>
+                    
+                    {!improvements[bulletId] && (
+                      <Button 
+                        onClick={handleBulletPointImprovement} 
+                        variant="primary"
+                        loading={loading.improve}
+                        className="mt-4"
+                      >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        {loading.improve ? 'Processing...' : 'Get AI Suggestions'}
+                      </Button>
+                    )}
                   </div>
-                ))}
-                <Button 
-                  onClick={handleAdditionalContextSubmit} 
-                  variant="secondary"
-                  loading={loading.improve}
-                  className="mt-4"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {loading.improve ? 'Processing...' : 'Submit Additional Context'}
-                </Button>
+                  
+                  {errors.improve && (
+                    <div className="text-red-500 dark:text-red-400 p-3 my-4 bg-red-50 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+                      {errors.improve}
+                    </div>
+                  )}
+                  
+                  {improvements[bulletId] && (
+                    <>
+                      <div className="py-4">
+                        <h3 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-2 flex items-center">
+                          <CheckCircle className="w-5 h-5 mr-2" />
+                          Improved Version
+                        </h3>
+                        <div className="mb-3">
+                          <Textarea
+                            value={improvements[bulletId]?.improvedBulletPoint || ""}
+                            onChange={(e) => {
+                              const updatedImprovements = {...improvements};
+                              updatedImprovements[bulletId] = {
+                                ...updatedImprovements[bulletId],
+                                improvedBulletPoint: e.target.value
+                              };
+                              setImprovements(updatedImprovements);
+                            }}
+                            rows={3}
+                            className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 focus:border-green-300 dark:focus:border-green-700"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => {
+                            // Update the resume data with the improved bullet point
+                            const updatedJobs = [...resumeData.bullet_points];
+                            updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
+                            setResumeData({...resumeData, bullet_points: updatedJobs});
+                            
+                            // Mark this bullet as saved
+                            setSavedBullets({...savedBullets, [bulletId]: true});
+
+                            // Show a temporary success message
+                            const tempMessage = document.createElement('div');
+                            tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
+                            tempMessage.innerHTML = 'Bullet point updated successfully!';
+                            document.getElementById('save-button-container').appendChild(tempMessage);
+                            
+                            // Remove the message after 3 seconds
+                            setTimeout(() => {
+                              if (tempMessage.parentNode) {
+                                tempMessage.parentNode.removeChild(tempMessage);
+                              }
+                            }, 3000);
+                          }}
+                          variant="secondary"
+                          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          Save Improved Version
+                        </Button>
+                        <div id="save-button-container" className="mt-2"></div>
+                      </div>
+                      
+                      <div className="py-4">
+                        <h3 className="text-lg font-semibold text-primary-700 dark:text-primary-400 mb-2 flex items-center">
+                          <Info className="w-5 h-5 mr-2" />
+                          Reasoning
+                        </h3>
+                        <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded border border-primary-200 dark:border-primary-800 text-gray-800 dark:text-gray-200">
+                          {improvements[bulletId]?.reasoning}
+                        </div>
+                      </div>
+                      
+                      <div className="pt-4">
+                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center">
+                          <ClipboardList className="w-5 h-5 mr-2" />
+                          Follow-up Questions
+                        </h3>
+                        
+                        {showFollowUpForBullets[bulletId] && improvements[bulletId]?.followUpQuestions ? (
+                          <div className="space-y-4">
+                            {improvements[bulletId].followUpQuestions.map((question, index) => (
+                              <div key={index} className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                                <p className="text-gray-800 dark:text-gray-200 mb-2">{question}</p>
+                                <Textarea
+                                  label="Your response"
+                                  placeholder="Provide additional context..."
+                                  value={additionalContexts[bulletId]?.[index] || ""}
+                                  onChange={(e) => handleAdditionalContextChange(index, e.target.value)}
+                                  rows={2}
+                                />
+                              </div>
+                            ))}
+                            <Button 
+                              onClick={handleAdditionalContextSubmit} 
+                              variant="secondary"
+                              loading={loading.improve}
+                              className="mt-2"
+                            >
+                              <Send className="w-4 h-4 mr-2" />
+                              {loading.improve ? 'Processing...' : 'Submit Additional Context'}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                            No follow-up questions available.
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4">
+                    <Sparkles className="w-8 h-8 text-gray-500 dark:text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    Select a Bullet Point
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                    Click on any bullet point from the job listings to get AI-powered suggestions for improvement.
+                  </p>
+                </div>
+              )}
               </div>
-            ) : (
-              <div className="text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
-                Follow-up questions will appear here after AI suggestions are generated.
-              </div>
-            )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1360,294 +1574,299 @@ const ResumeImprovement = () => {
             </p>
           </div>
           
-        {/* Strengths Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-green-700 dark:text-green-400 flex items-center">
-            <div className="bg-green-100 dark:bg-green-900/50 p-1.5 rounded-full mr-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            </div>
-            Resume Strengths
-          </h3>
-          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-            <ul className="space-y-3">
-              {resumeAnalysis.strengths.map((strength, index) => (
-                <li key={index} className="flex items-start">
-                  <span className="text-green-600 dark:text-green-400 mr-2 font-bold">•</span>
-                  <span className="text-gray-800 dark:text-gray-200">{strength}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        
-        {/* Weaknesses Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-yellow-700 dark:text-yellow-500 flex items-center">
-            <div className="bg-yellow-100 dark:bg-yellow-900/50 p-1.5 rounded-full mr-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600 dark:text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            Areas for Improvement
-          </h3>
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-            <ul className="space-y-3">
-              {resumeAnalysis.weaknesses.map((weakness, index) => (
-                <li key={index} className="flex items-start">
-                  <span className="text-yellow-600 dark:text-yellow-400 mr-2 font-bold">•</span>
-                  <span className="text-gray-800 dark:text-gray-200">{weakness}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        
-        {/* Recommendations Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-primary-700 dark:text-primary-400 flex items-center">
-            <div className="bg-primary-100 dark:bg-primary-900/50 p-1.5 rounded-full mr-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600 dark:text-primary-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            Recommended Improvements
-          </h3>
-          <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800">
-            <ul className="space-y-3">
-              {resumeAnalysis.areasForImprovement.map((recommendation, index) => (
-                <li key={index} className="flex items-start">
-                  <span className="text-primary-600 dark:text-primary-400 mr-2 font-bold">•</span>
-                  <span className="text-gray-800 dark:text-gray-200">{recommendation}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        
-        {/* ATS Keyword Optimization Section */}
-        {resumeAnalysis.atsKeywords && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold mb-3 text-cyan-700 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-              </svg>
-              ATS Keyword Optimization
-            </h3>
-            <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
-              <p className="text-sm text-cyan-800 mb-3">
-                Applicant Tracking Systems (ATS) scan resumes for relevant keywords. Below are keywords that are important for your target roles:
-              </p>
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium text-cyan-800 mb-2 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+          {/* Main analysis content in single column */}
+          <div className="space-y-8">
+              {/* Strengths Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-green-700 dark:text-green-400 flex items-center">
+                  <div className="bg-green-100 dark:bg-green-900/50 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    Keywords Present in Your Resume
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {resumeAnalysis.atsKeywords
-                      .filter(keyword => keyword.present)
-                      .map((keyword, index) => (
-                        <span 
-                          key={index} 
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            keyword.priority === "High" 
-                              ? "bg-green-100 text-green-800" 
-                              : keyword.priority === "Medium"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {keyword.keyword}
-                          {keyword.priority === "High" && <span className="ml-1">★</span>}
-                        </span>
-                      ))}
                   </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-cyan-800 mb-2 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                    </svg>
-                    Keywords to Add to Your Resume
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {resumeAnalysis.atsKeywords
-                      .filter(keyword => !keyword.present)
-                      .map((keyword, index) => (
-                        <span 
-                          key={index} 
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            keyword.priority === "High" 
-                              ? "bg-red-100 text-red-800 border border-red-200" 
-                              : keyword.priority === "Medium"
-                              ? "bg-orange-100 text-orange-800 border border-orange-200"
-                              : "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                          }`}
-                        >
-                          {keyword.keyword}
-                          {keyword.priority === "High" && <span className="ml-1">★</span>}
-                        </span>
-                      ))}
-                  </div>
-                  <p className="text-xs text-cyan-600 mt-2">
-                    <strong>Priority Guide:</strong> Keywords with ★ are high priority and should be included if relevant to your experience.
-                  </p>
+                  Resume Strengths
+                </h3>
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                  <ul className="space-y-3">
+                    {resumeAnalysis.strengths.map((strength, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-green-600 dark:text-green-400 mr-2 font-bold">•</span>
+                        <span className="text-gray-800 dark:text-gray-200">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Missing Skills Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3 text-purple-700 dark:text-purple-400 flex items-center">
-            <div className="bg-purple-100 dark:bg-purple-900/50 p-1.5 rounded-full mr-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600 dark:text-purple-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            Skills to Consider Adding
-          </h3>
-          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-            <div className="flex flex-wrap gap-2">
-              {resumeAnalysis.missingSkills.map((skill, index) => (
-                <span
-                  key={index}
-                  className="bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-medium transition-colors duration-200"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
         
-        {/* Top Industries Section */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-3 text-emerald-700 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H7a1 1 0 00-1 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-            </svg>
-            Top Industries for Your Skills
-          </h3>
-          <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-            <div className="space-y-4">
-              {resumeAnalysis.topIndustries.map((industry, index) => (
-                <div key={index} className="border-b border-emerald-100 pb-3 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-emerald-800">{industry.name}</h4>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      industry.match === "High" 
-                        ? "bg-green-100 text-green-800" 
-                        : industry.match === "Medium"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-gray-100 text-gray-800"
-                    }`}>
-                      {industry.match} Match
-                    </span>
+              {/* Weaknesses Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-yellow-700 dark:text-yellow-500 flex items-center">
+                  <div className="bg-yellow-100 dark:bg-yellow-900/50 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600 dark:text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {industry.keySkills.map((skill, skillIndex) => (
-                      <span 
-                        key={skillIndex}
-                        className="bg-white text-emerald-700 text-xs px-2 py-1 rounded border border-emerald-200"
+                  Areas for Improvement
+                </h3>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <ul className="space-y-3">
+                    {resumeAnalysis.weaknesses.map((weakness, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-yellow-600 dark:text-yellow-400 mr-2 font-bold">•</span>
+                        <span className="text-gray-800 dark:text-gray-200">{weakness}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              {/* Recommendations Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary-700 dark:text-primary-400 flex items-center">
+                  <div className="bg-primary-100 dark:bg-primary-900/50 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600 dark:text-primary-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Recommended Improvements
+                </h3>
+                <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800">
+                  <ul className="space-y-3">
+                    {resumeAnalysis.areasForImprovement.map((recommendation, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-primary-600 dark:text-primary-400 mr-2 font-bold">•</span>
+                        <span className="text-gray-800 dark:text-gray-200">{recommendation}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+        
+              {/* ATS Keyword Optimization Section */}
+              {resumeAnalysis.atsKeywords && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold mb-3 text-cyan-700 dark:text-cyan-400 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                    ATS Keyword Optimization
+                  </h3>
+                  <div className="bg-cyan-50 dark:bg-cyan-900/20 p-4 rounded-lg border border-cyan-200 dark:border-cyan-800">
+                    <p className="text-sm text-cyan-800 dark:text-cyan-300 mb-3">
+                      Applicant Tracking Systems (ATS) scan resumes for relevant keywords. Below are keywords that are important for your target roles:
+                    </p>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-cyan-800 dark:text-cyan-400 mb-2 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Keywords Present in Your Resume
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {resumeAnalysis.atsKeywords
+                            .filter(keyword => keyword.present)
+                            .map((keyword, index) => (
+                              <span 
+                                key={index} 
+                                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                  keyword.priority === "High" 
+                                    ? "bg-green-100 dark:bg-green-900/60 text-green-800 dark:text-green-300" 
+                                    : keyword.priority === "Medium"
+                                    ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                                    : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
+                                }`}
+                              >
+                                {keyword.keyword}
+                                {keyword.priority === "High" && <span className="ml-1">★</span>}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium text-cyan-800 dark:text-cyan-400 mb-2 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                          </svg>
+                          Keywords to Add to Your Resume
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {resumeAnalysis.atsKeywords
+                            .filter(keyword => !keyword.present)
+                            .map((keyword, index) => (
+                              <span 
+                                key={index} 
+                                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                  keyword.priority === "High" 
+                                    ? "bg-red-100 dark:bg-red-900/60 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800" 
+                                    : keyword.priority === "Medium"
+                                    ? "bg-orange-100 dark:bg-orange-900/60 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
+                                    : "bg-yellow-100 dark:bg-yellow-900/60 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
+                                }`}
+                              >
+                                {keyword.keyword}
+                                {keyword.priority === "High" && <span className="ml-1">★</span>}
+                              </span>
+                            ))}
+                        </div>
+                        <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-2">
+                          <strong>Priority Guide:</strong> Keywords with ★ are high priority and should be included if relevant to your experience.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Missing Skills Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-purple-700 dark:text-purple-400 flex items-center">
+                  <div className="bg-purple-100 dark:bg-purple-900/50 p-1.5 rounded-full mr-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600 dark:text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Skills to Consider Adding
+                </h3>
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="flex flex-wrap gap-2">
+                    {resumeAnalysis.missingSkills.map((skill, index) => (
+                      <span
+                        key={index}
+                        className="bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-medium transition-colors duration-200"
                       >
                         {skill}
                       </span>
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Recommended Roles Section */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-3 text-indigo-700 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
-              <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z" />
-            </svg>
-            Recommended Roles
-          </h3>
-          <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {resumeAnalysis.recommendedRoles.map((role, index) => (
-                <div 
-                  key={index} 
-                  className="bg-white border border-indigo-200 rounded-lg p-3 text-center hover:shadow-md transition-shadow"
-                >
-                  <span className="text-indigo-700 font-medium">{role}</span>
+              </div>
+              
+              {/* Top Industries Section */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-3 text-emerald-700 dark:text-emerald-400 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H7a1 1 0 00-1 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                  </svg>
+                  Top Industries for Your Skills
+                </h3>
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <div className="space-y-4">
+                    {resumeAnalysis.topIndustries.map((industry, index) => (
+                      <div key={index} className="border-b border-emerald-100 dark:border-emerald-800/50 pb-3 last:border-0 last:pb-0">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-medium text-emerald-800 dark:text-emerald-300">{industry.name}</h4>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            industry.match === "High" 
+                              ? "bg-green-100 dark:bg-green-900/60 text-green-800 dark:text-green-300" 
+                              : industry.match === "Medium"
+                              ? "bg-yellow-100 dark:bg-yellow-900/60 text-yellow-800 dark:text-yellow-300"
+                              : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
+                          }`}>
+                            {industry.match} Match
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {industry.keySkills.map((skill, skillIndex) => (
+                            <span 
+                              key={skillIndex}
+                              className="bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-300 text-xs px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Top Companies Section */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-3 text-rose-700 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-            </svg>
-            Companies to Apply To
-          </h3>
-          <div className="bg-rose-50 p-4 rounded-lg border border-rose-200">
-            <div className="mb-4">
-              <h4 className="font-medium text-rose-800 mb-2 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l.707.707L15.414 4l.707-.707a1 1 0 111.414 1.414L16.829 5.5l.707.707a1 1 0 01-1.414 1.414L15.414 7l-.707.707a1 1 0 01-1.414-1.414l.707-.707-.707-.707a1 1 0 010-1.414zM17 11a1 1 0 01.707.293l.707.707L19.414 13l.707-.707a1 1 0 111.414 1.414L20.829 14.5l.707.707a1 1 0 01-1.414 1.414L19.414 16l-.707.707a1 1 0 01-1.414-1.414l.707-.707-.707-.707A1 1 0 0117 13z" clipRule="evenodd" />
-                </svg>
-                Top-tier companies in your field
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {resumeAnalysis.companies.major.map((company, index) => (
-                  <div 
-                    key={index} 
-                    className="bg-white border border-rose-200 rounded-lg p-2 text-center hover:shadow-md transition-shadow flex items-center justify-center"
-                  >
-                    <span className="text-rose-700 font-medium text-sm">{company}</span>
-                  </div>
-                ))}
               </div>
-            </div>
 
+            {/* Recommended Roles Section */}
             <div>
-              <h4 className="font-medium text-rose-800 mb-2 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
+              <h3 className="text-lg font-semibold mb-3 text-indigo-700 dark:text-indigo-400 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
+                  <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z" />
                 </svg>
-                Promising companies with growth potential
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {resumeAnalysis.companies.promising.map((company, index) => (
-                  <div 
-                    key={index} 
-                    className="bg-white border border-rose-200 rounded-lg p-2 text-center hover:shadow-md transition-shadow flex items-center justify-center relative group"
-                  >
-                    <span className="text-rose-700 font-medium text-sm">{company}</span>
+                Recommended Roles
+              </h3>
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {resumeAnalysis.recommendedRoles.map((role, index) => (
+                    <div 
+                      key={index} 
+                      className="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 text-center hover:shadow-md transition-shadow"
+                    >
+                      <span className="text-indigo-700 dark:text-indigo-300 font-medium">{role}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Top Companies Section */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-rose-700 dark:text-rose-400 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                </svg>
+                Companies to Apply To
+              </h3>
+              <div className="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-lg border border-rose-200 dark:border-rose-800">
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="font-medium text-rose-800 dark:text-rose-300 mb-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l.707.707L15.414 4l.707-.707a1 1 0 111.414 1.414L16.829 5.5l.707.707a1 1 0 01-1.414 1.414L15.414 7l-.707.707a1 1 0 01-1.414-1.414l.707-.707-.707-.707a1 1 0 010-1.414zM17 11a1 1 0 01.707.293l.707.707L19.414 13l.707-.707a1 1 0 111.414 1.414L20.829 14.5l.707.707a1 1 0 01-1.414 1.414L19.414 16l-.707.707a1 1 0 01-1.414-1.414l.707-.707-.707-.707A1 1 0 0117 13z" clipRule="evenodd" />
+                      </svg>
+                      Top-tier companies in your field
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {resumeAnalysis.companies.major.map((company, index) => (
+                        <div 
+                          key={index} 
+                          className="bg-white dark:bg-gray-800 border border-rose-200 dark:border-rose-800 rounded-lg p-2 text-center hover:shadow-md transition-shadow flex items-center justify-center"
+                        >
+                          <span className="text-rose-700 dark:text-rose-300 font-medium text-sm">{company}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+
+                  <div>
+                    <h4 className="font-medium text-rose-800 dark:text-rose-300 mb-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
+                      </svg>
+                      Promising companies with growth potential
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {resumeAnalysis.companies.promising.map((company, index) => (
+                        <div 
+                          key={index} 
+                          className="bg-white dark:bg-gray-800 border border-rose-200 dark:border-rose-800 rounded-lg p-2 text-center hover:shadow-md transition-shadow flex items-center justify-center relative group"
+                        >
+                          <span className="text-rose-700 dark:text-rose-300 font-medium text-sm">{company}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         
-        <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-          <Button 
-            onClick={() => setStep(3)} 
-            variant="primary"
-            className="w-full"
-          >
-            Continue to Bullet Improvement
-          </Button>
-        </div>
+          {/* Continue button aligned under the content */}
+          <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button 
+              onClick={() => setStep(3)} 
+              variant="primary"
+              className="w-full"
+            >
+              Continue to Bullet Improvement
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -1883,7 +2102,7 @@ const ResumeImprovement = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center transition-colors duration-200">
-      <div className="w-full max-w-4xl flex flex-col items-center justify-center flex-grow py-8 px-4">
+      <div className="w-full max-w-7xl flex flex-col items-center justify-center flex-grow py-8 px-4">
         <div className="w-full text-center">
           <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-900 dark:text-white transition-colors">
             Resume Improvement Assistant
@@ -1895,7 +2114,7 @@ const ResumeImprovement = () => {
         
         {/* Navigation steps - only show if we're past feature selection */}
         {step > 0 && (
-          <div className="w-full max-w-3xl px-2 mb-6 mt-2 animate-fade-in">
+          <div className="w-full px-2 mb-6 mt-2 animate-fade-in max-w-[90vw] lg:max-w-6xl xl:max-w-7xl">
             <StepNavigation 
               currentStep={step} 
               steps={navigationSteps.slice(1)} // Skip feature selection step in nav
@@ -1907,12 +2126,25 @@ const ResumeImprovement = () => {
         )}
         
         <div key={step} className="w-full flex justify-center">
-          <div className="w-full max-w-3xl animate-slide-in">
+          <div className={`w-full animate-slide-in ${
+            // Different max widths based on the step
+            step === 3 
+              ? 'max-w-[95vw] lg:max-w-6xl xl:max-w-7xl' // Wider for bullet improvement
+              : step === 2.5 
+                ? 'max-w-[90vw] lg:max-w-5xl' // Medium width for analysis
+                : 'max-w-[90vw] lg:max-w-4xl' // Regular width for other steps
+          }`}>
             {renderStep()}
           </div>
         </div>
         
-        <div className="w-full max-w-3xl mt-6 animate-fade-in">
+        <div className={`w-full mt-6 animate-fade-in ${
+          step === 3 
+            ? 'max-w-[95vw] lg:max-w-6xl xl:max-w-7xl' 
+            : step === 2.5 
+              ? 'max-w-[90vw] lg:max-w-5xl'
+              : 'max-w-[90vw] lg:max-w-4xl'
+        }`}>
           {renderNavigationButtons()}
         </div>
       </div>
