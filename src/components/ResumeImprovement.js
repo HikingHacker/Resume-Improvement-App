@@ -174,6 +174,7 @@ const ResumeImprovement = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [resumeAnalysis, setResumeAnalysis] = useState(null);
   const [savedBullets, setSavedBullets] = useState({});
+  const [originalBullets, setOriginalBullets] = useState({}); // Store original bullets separately
   const [resumeEdited, setResumeEdited] = useState(false);
   
   // State for editing job details in overview
@@ -197,6 +198,7 @@ const ResumeImprovement = () => {
     setEditedBullet("");
     setResumeAnalysis(null);
     setSavedBullets({});
+    setOriginalBullets({});
   };
 
   const handleFileUpload = async (event) => {
@@ -224,6 +226,16 @@ const ResumeImprovement = () => {
           setResumeData(result.parsedData);
           setFlatBulletPoints(result.bulletPoints || []);
           
+          // Store the original bullet points when first loading the resume
+          const originalBulletsMap = {};
+          result.parsedData.bullet_points.forEach((job, jobIndex) => {
+            job.achievements?.forEach((bullet, bulletIndex) => {
+              const bulletId = getBulletId(jobIndex, bulletIndex);
+              originalBulletsMap[bulletId] = bullet;
+            });
+          });
+          setOriginalBullets(originalBulletsMap);
+          
           // Check if we actually have any bullet points
           const totalBullets = result.parsedData.bullet_points.reduce(
             (sum, job) => sum + (job.achievements?.length || 0), 0
@@ -242,6 +254,16 @@ const ResumeImprovement = () => {
           // Create a structured format from the flat list
           const structuredData = createStructuredDataFromFlatBullets(result.bulletPoints);
           setResumeData(structuredData);
+          
+          // Store the original bullet points when first loading the resume
+          const originalBulletsMap = {};
+          structuredData.bullet_points.forEach((job, jobIndex) => {
+            job.achievements?.forEach((bullet, bulletIndex) => {
+              const bulletId = getBulletId(jobIndex, bulletIndex);
+              originalBulletsMap[bulletId] = bullet;
+            });
+          });
+          setOriginalBullets(originalBulletsMap);
         } else {
           // No usable data
           console.error("No usable data in parsing result");
@@ -1043,7 +1065,7 @@ const ResumeImprovement = () => {
                           const isSelected = currentJobIndex !== null && currentBulletIndex === bulletIndex;
                           const thisBulletId = getBulletId(currentJobIndex, bulletIndex);
                           const hasImprovement = improvements[thisBulletId]?.improvedBulletPoint;
-                          const isSaved = savedBullets[thisBulletId];
+                          const isSaved = !!savedBullets[thisBulletId];
                           
                           return (
                             <div 
@@ -1153,7 +1175,10 @@ const ResumeImprovement = () => {
                   <div className="pb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Original Bullet Point</h3>
                     <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                      {jobs[currentJobIndex]?.achievements?.[currentBulletIndex] || "No bullet point selected"}
+                      {/* Always show the original version from our originalBullets store */}
+                      {bulletId && originalBullets[bulletId]
+                        ? originalBullets[bulletId]
+                        : jobs[currentJobIndex]?.achievements?.[currentBulletIndex] || "No bullet point selected"}
                     </div>
                     
                     {/* Show loading state when suggestions are being generated */}
@@ -1217,7 +1242,10 @@ const ResumeImprovement = () => {
                               setResumeData({...resumeData, bullet_points: updatedJobs});
                               
                               // Mark this bullet as saved
-                              setSavedBullets({...savedBullets, [bulletId]: true});
+                              setSavedBullets({
+                                ...savedBullets, 
+                                [bulletId]: true
+                              });
 
                               // Show a temporary success message
                               const tempMessage = document.createElement('div');
@@ -1247,7 +1275,10 @@ const ResumeImprovement = () => {
                               setResumeData({...resumeData, bullet_points: updatedJobs});
                               
                               // Mark this bullet as saved
-                              setSavedBullets({...savedBullets, [bulletId]: true});
+                              setSavedBullets({
+                                ...savedBullets, 
+                                [bulletId]: true
+                              });
                               
                               // Navigate to next bullet point
                               navigateBulletPoints('next');
@@ -1358,9 +1389,12 @@ const ResumeImprovement = () => {
                   {job.achievements?.map((bullet, bulletIndex) => {
                     const bulletId = getBulletId(jobIndex, bulletIndex);
                     const improved = improvements[bulletId]?.improvedBulletPoint;
+                    // Use the original bullet from our store
+                    const originalBullet = originalBullets[bulletId] || bullet;
+                    
                     return (
                       <TableRow key={bulletIndex}>
-                        <TableCell className="align-top">{bullet}</TableCell>
+                        <TableCell className="align-top">{originalBullet}</TableCell>
                         <TableCell className={improved ? "align-top bg-green-50 dark:bg-green-900/20" : "align-top bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400"}>
                           {improved || "Not improved yet"}
                         </TableCell>
