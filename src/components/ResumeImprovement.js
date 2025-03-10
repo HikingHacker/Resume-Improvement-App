@@ -869,48 +869,37 @@ const ResumeImprovement = () => {
               
               <div className="overflow-auto max-h-[45vh] p-4">
                 <div className="space-y-6">
-                  {/* Job Selection First */}
-                  <div className="mb-6">
-                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">Select a Job Position:</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Job Selection First - Compact Version */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Select a Job Position:</h4>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {currentJobIndex !== null ? 
+                          `${jobs[currentJobIndex]?.position} at ${jobs[currentJobIndex]?.company} selected` : 
+                          "No position selected"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       {jobs.map((job, jobIndex) => (
                         <button 
                           key={jobIndex}
                           onClick={() => setCurrentJobIndex(jobIndex)}
                           className={`
-                            p-4 rounded-lg border text-left transition-colors
+                            py-1 px-3 rounded-full text-sm border transition-colors flex items-center
                             ${currentJobIndex === jobIndex 
-                              ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 shadow-md' 
-                              : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80'
+                              ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                              : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
                             }
                           `}
+                          title={`${job.position} at ${job.company}${job.time_period ? ` (${job.time_period})` : ''}`}
                         >
-                          <div className="flex items-start">
-                            <div className="bg-primary-100 dark:bg-primary-900 p-2 rounded-full mr-3 flex-shrink-0">
-                              <Building className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">{job.company}</h3>
-                              <div className="flex items-center">
-                                <Job className="w-4 h-4 mr-1 flex-shrink-0 text-gray-600 dark:text-gray-400" />
-                                <span className="text-gray-700 dark:text-gray-300 truncate">{job.position}</span>
-                              </div>
-                              {job.time_period && (
-                                <div className="flex items-center">
-                                  <Calendar className="w-4 h-4 mr-1 flex-shrink-0 text-gray-600 dark:text-gray-400" />
-                                  <span className="text-gray-700 dark:text-gray-300 truncate">{job.time_period}</span>
-                                </div>
-                              )}
-                              <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">
-                                {job.achievements?.length || 0} bullet point{(job.achievements?.length || 0) !== 1 ? 's' : ''}
-                              </div>
-                            </div>
-                            {currentJobIndex === jobIndex && (
-                              <div className="bg-primary-100 dark:bg-primary-900 rounded-full p-1 ml-2 flex-shrink-0">
-                                <CheckCircle className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                              </div>
-                            )}
-                          </div>
+                          <span className="truncate max-w-[150px]">{job.company}</span>
+                          {currentJobIndex === jobIndex && (
+                            <CheckCircle className="w-3.5 h-3.5 ml-1 text-primary-600 dark:text-primary-400" />
+                          )}
+                          <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">
+                            {job.achievements?.length || 0}
+                          </span>
                         </button>
                       ))}
                     </div>
