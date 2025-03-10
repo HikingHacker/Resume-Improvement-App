@@ -580,6 +580,7 @@ export const ResumeAPI = {
    *   success: boolean,
    *   improvedBulletPoint: string,
    *   reasoning: string,
+   *   remainingWeaknesses: string,
    *   followUpQuestions: string[]
    * }>}
    * 

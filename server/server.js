@@ -116,7 +116,8 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
     Respond with ONLY a JSON object containing the following fields:
     - improvedBulletPoint: The enhanced version of the bullet point
     - reasoning: Brief explanation of the improvements you made
-    - followUpQuestions: An array of 3 questions to elicit more information that could further improve the bullet point
+    - remainingWeaknesses: One or two specific areas where the bullet point could still be improved (be specific and constructive)
+    - followUpQuestions: An array of 3 questions to elicit more information that could address the remaining weaknesses
   `;
 
   const prompt = `
@@ -146,6 +147,7 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
       success: true,
       improvedBulletPoint: parsedResponse.improvedBulletPoint,
       reasoning: parsedResponse.reasoning,
+      remainingWeaknesses: parsedResponse.remainingWeaknesses || "No specific weaknesses identified.",
       followUpQuestions: parsedResponse.followUpQuestions
     };
   } catch (error) {

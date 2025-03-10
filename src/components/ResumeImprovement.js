@@ -1303,10 +1303,20 @@ const ResumeImprovement = () => {
                         </div>
                       </div>
                       
+                      <div className="py-4">
+                        <h3 className="text-lg font-semibold text-yellow-700 dark:text-yellow-500 mb-2 flex items-center">
+                          <AlertTriangle className="w-5 h-5 mr-2" />
+                          Areas for Further Improvement
+                        </h3>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-200 dark:border-yellow-800 text-gray-800 dark:text-gray-200">
+                          {improvements[bulletId]?.remainingWeaknesses || "No specific weaknesses identified."}
+                        </div>
+                      </div>
+                      
                       <div className="pt-4">
                         <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center">
                           <ClipboardList className="w-5 h-5 mr-2" />
-                          Follow-up Questions
+                          Answer These Questions to Improve Further
                         </h3>
                         
                         {showFollowUpForBullets[bulletId] && improvements[bulletId]?.followUpQuestions ? (
