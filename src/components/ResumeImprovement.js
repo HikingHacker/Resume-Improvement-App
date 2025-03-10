@@ -291,7 +291,9 @@ const ResumeImprovement = () => {
             console.error("Background analysis error:", error);
           });
         
-        setStep(2); // Go to resume overview page (now step 2)
+        // Go to resume overview page and scroll to top
+        window.scrollTo(0, 0);
+        setStep(2);
       } catch (error) {
         console.error("Error parsing resume:", error);
         setErrors(prev => ({ ...prev, parse: error.message || "Failed to parse your resume" }));
@@ -1682,7 +1684,10 @@ const ResumeImprovement = () => {
             )}
           </p>
           <Button 
-            onClick={() => setStep(2.5)} 
+            onClick={() => {
+              window.scrollTo(0, 0);
+              setStep(2.5);
+            }} 
             variant="primary"
             className="w-full"
           >
@@ -2126,7 +2131,10 @@ const ResumeImprovement = () => {
           {/* Continue button aligned under the content */}
           <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
             <Button 
-              onClick={() => setStep(3)} 
+              onClick={() => {
+                window.scrollTo(0, 0);
+                setStep(3);
+              }} 
               variant="primary"
               className="w-full"
             >
