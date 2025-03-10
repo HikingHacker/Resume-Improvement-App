@@ -162,7 +162,7 @@ const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStep
 };
 
 const ResumeImprovement = () => {
-  const { loading, errors, parseResume, getAISuggestions, analyzeResume, exportResume } = useResumeService();
+  const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume } = useResumeService();
   const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 4: final review
   const [resumeData, setResumeData] = useState({ bullet_points: [] });
   const [flatBulletPoints, setFlatBulletPoints] = useState([]);
@@ -246,6 +246,25 @@ const ResumeImprovement = () => {
         }
         
         setResumeEdited(false); // Reset edit flag on new upload
+        
+        // Immediately begin the resume analysis in the background
+        // This preloads the analysis while the user is on the overview page
+        console.log("Starting background analysis after file upload...");
+        const dataToAnalyze = result.parsedData || structuredData;
+        setLoading(prev => ({ ...prev, analyze: true }));
+        
+        // Trigger analysis immediately to prepare data before user goes to analysis page
+        analyzeResume(dataToAnalyze)
+          .then(analysis => {
+            if (analysis) {
+              setResumeAnalysis(analysis);
+              console.log("Background analysis completed successfully");
+            }
+          })
+          .catch(error => {
+            console.error("Background analysis error:", error);
+          });
+        
         setStep(2); // Go to resume overview page (now step 2)
       } catch (error) {
         console.error("Error parsing resume:", error);
@@ -1314,6 +1333,15 @@ const ResumeImprovement = () => {
                 <p className="text-sm text-yellow-700 dark:text-yellow-400">
                   Please review the information below and make corrections if needed. Accurate data will lead to better improvement suggestions.
                 </p>
+                {loading.analyze && (
+                  <p className="mt-2 text-sm text-primary-600 dark:text-primary-400 flex items-center">
+                    <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Analyzing your resume in the background...
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1455,13 +1483,34 @@ const ResumeImprovement = () => {
         <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             After reviewing and correcting your resume data, continue to view your resume analysis or go back to upload a different file.
+            {resumeAnalysis && !resumeEdited && (
+              <span className="block mt-2 text-green-600 dark:text-green-400">
+                <CheckCircle className="inline-block w-4 h-4 mr-1" />
+                Your analysis is ready to view!
+              </span>
+            )}
+            {!resumeAnalysis && !loading.analyze && (
+              <span className="block mt-2 text-gray-500 dark:text-gray-400">
+                <Info className="inline-block w-4 h-4 mr-1" />
+                Analysis will begin when you continue.
+              </span>
+            )}
+            {loading.analyze && (
+              <span className="block mt-2 text-primary-600 dark:text-primary-400">
+                <svg className="inline-block w-4 h-4 mr-1 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Analyzing your resume in the background...
+              </span>
+            )}
           </p>
           <Button 
             onClick={() => setStep(2.5)} 
             variant="primary"
             className="w-full"
           >
-            Continue to Resume Analysis
+            {resumeAnalysis ? "View Your Resume Analysis" : "Continue to Resume Analysis"}
           </Button>
         </div>
         </CardContent>
@@ -1471,15 +1520,20 @@ const ResumeImprovement = () => {
   
   // Function to get resume analysis from AI when moving to analysis page
   const getResumeAnalysis = async () => {
+    // Don't run analysis if we already have it, unless forceRefresh is true
     if (!resumeAnalysis) {
       try {
+        console.log("Starting resume analysis on analysis page...");
         const analysis = await analyzeResume(resumeData);
         if (analysis) {
           setResumeAnalysis(analysis);
+          console.log("Analysis completed successfully");
         }
       } catch (error) {
         console.error("Error getting resume analysis:", error);
       }
+    } else {
+      console.log("Using existing resume analysis data");
     }
   };
 
