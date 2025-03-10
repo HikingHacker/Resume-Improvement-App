@@ -867,40 +867,94 @@ const ResumeImprovement = () => {
                 </p>
               </div>
               
-              {/* Static Job Selection Header - Always Visible */}
+              {/* Static Job Selection Header with Improved Stats - Always Visible */}
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850">
-                <div className="mb-2">
+                <div className="mb-1">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Select a Job Position:</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Select a Job Position:</h4>
+                      
+                      {/* Overall progress indicator */}
+                      <div className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg text-xs flex items-center">
+                        <div className="flex items-center mr-1.5 text-gray-700 dark:text-gray-300">
+                          <CheckCircle className="w-3 h-3 mr-1 text-green-500 dark:text-green-400" />
+                          <span>
+                            {Object.keys(savedBullets).length} 
+                          </span>
+                        </div>
+                        <span className="text-gray-500 dark:text-gray-500">/</span>
+                        <div className="flex items-center ml-1.5 text-gray-700 dark:text-gray-300">
+                          <span>{getTotalBulletPoints()}</span>
+                          <span className="ml-1 text-gray-500 dark:text-gray-500">total</span>
+                        </div>
+                      </div>
+                    </div>
+                    
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {currentJobIndex !== null ? 
                         `${jobs[currentJobIndex]?.position} at ${jobs[currentJobIndex]?.company} selected` : 
                         "No position selected"}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {jobs.map((job, jobIndex) => (
-                      <button 
-                        key={jobIndex}
-                        onClick={() => setCurrentJobIndex(jobIndex)}
-                        className={`
-                          py-1 px-3 rounded-full text-sm border transition-colors flex items-center
-                          ${currentJobIndex === jobIndex 
-                            ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
-                            : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
-                          }
-                        `}
-                        title={`${job.position} at ${job.company}${job.time_period ? ` (${job.time_period})` : ''}`}
-                      >
-                        <span className="truncate max-w-[150px]">{job.company}</span>
-                        {currentJobIndex === jobIndex && (
-                          <CheckCircle className="w-3.5 h-3.5 ml-1 text-primary-600 dark:text-primary-400" />
-                        )}
-                        <span className="ml-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">
-                          {job.achievements?.length || 0}
-                        </span>
-                      </button>
-                    ))}
+                  
+                  {/* Progress bar for overall completion */}
+                  <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mt-2 mb-3">
+                    <div 
+                      className="h-1.5 bg-green-500 dark:bg-green-400 rounded-full"
+                      style={{ width: `${(Object.keys(savedBullets).length / getTotalBulletPoints()) * 100}%` }}
+                    ></div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {jobs.map((job, jobIndex) => {
+                      // Calculate improved bullets for this job
+                      const totalJobBullets = job.achievements?.length || 0;
+                      const improvedJobBullets = job.achievements?.reduce((count, _, bulletIndex) => {
+                        const bulletId = getBulletId(jobIndex, bulletIndex);
+                        return savedBullets[bulletId] ? count + 1 : count;
+                      }, 0) || 0;
+                      
+                      // Calculate progress percentage
+                      const progressPercent = totalJobBullets > 0 
+                        ? Math.round((improvedJobBullets / totalJobBullets) * 100) 
+                        : 0;
+                      
+                      return (
+                        <button 
+                          key={jobIndex}
+                          onClick={() => setCurrentJobIndex(jobIndex)}
+                          className={`
+                            py-1 px-3 rounded-full text-sm border transition-colors flex items-center
+                            ${currentJobIndex === jobIndex 
+                              ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                              : progressPercent === 100
+                                ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                                : progressPercent > 0
+                                  ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                                  : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                            }
+                          `}
+                          title={`${job.position} at ${job.company}${job.time_period ? ` (${job.time_period})` : ''}\n${improvedJobBullets}/${totalJobBullets} bullet points improved`}
+                        >
+                          <span className="truncate max-w-[120px]">{job.company}</span>
+                          
+                          {currentJobIndex === jobIndex && (
+                            <CheckCircle className="w-3.5 h-3.5 ml-1 text-primary-600 dark:text-primary-400" />
+                          )}
+                          
+                          {/* Progress indicator for this job */}
+                          <div className="ml-1.5 flex items-center bg-gray-100 dark:bg-gray-700 rounded-full px-1.5 py-0.5 text-xs">
+                            <span className={progressPercent === 100 ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}>
+                              {improvedJobBullets}
+                            </span>
+                            <span className="mx-0.5 text-gray-500">/</span>
+                            <span className="text-gray-700 dark:text-gray-300">
+                              {totalJobBullets}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
