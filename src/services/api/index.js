@@ -31,6 +31,196 @@ const API_CONFIG = {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Generates mock resume analysis data based on provided resume data
+ * In a real implementation, this would be handled by an AI model
+ * 
+ * @param {Object} resumeData - The resume data to analyze 
+ * @returns {Object} Mock analysis data
+ */
+const generateMockAnalysis = (resumeData) => {
+  // Extract job titles and skills from resume data to personalize the mock analysis
+  const jobTitles = resumeData.bullet_points.map(job => job.position || "Unknown Position");
+  const companies = resumeData.bullet_points.map(job => job.company || "Unknown Company");
+  
+  // Generate personalized job titles if available
+  const latestPosition = jobTitles[0] || "Software Developer";
+  
+  // Simulated skills extraction - in a real implementation this would be done by AI
+  const extractedSkills = [];
+  const achievements = [];
+  
+  // Extract potential skills from bullet points
+  resumeData.bullet_points.forEach(job => {
+    if (job.achievements) {
+      job.achievements.forEach(bullet => {
+        // Look for technical terms
+        const techTerms = [
+          "JavaScript", "React", "Node.js", "Python", "Java", "C#", 
+          "AWS", "Azure", "Cloud", "Docker", "Kubernetes", "CI/CD",
+          "SQL", "NoSQL", "MongoDB", "PostgreSQL", "Database",
+          "API", "REST", "GraphQL", "UI/UX", "Design", "Agile", "Scrum"
+        ];
+        
+        techTerms.forEach(term => {
+          if (bullet.includes(term) && !extractedSkills.includes(term)) {
+            extractedSkills.push(term);
+          }
+        });
+        
+        // Look for achievement indicators
+        if (bullet.match(/increased|improved|reduced|saved|achieved|delivered|launched|implemented/i)) {
+          achievements.push(bullet);
+        }
+      });
+    }
+  });
+  
+  // Generate ATS keywords based on job title and extracted skills
+  const allPossibleKeywords = [
+    "JavaScript", "React", "Angular", "Vue.js", "Node.js", "Express", 
+    "Python", "Django", "Flask", "Java", "Spring", "C#", ".NET",
+    "AWS", "Azure", "GCP", "Cloud Architecture", "Docker", "Kubernetes",
+    "DevOps", "CI/CD", "Jenkins", "GitHub Actions", "Agile", "Scrum",
+    "SQL", "NoSQL", "MongoDB", "PostgreSQL", "Database Design",
+    "REST API", "GraphQL", "Microservices", "System Design",
+    "UI/UX", "Figma", "Sketch", "Adobe XD", "Mobile Development",
+    "Project Management", "Team Leadership", "Technical Writing"
+  ];
+  
+  // Determine which keywords are already present in the resume
+  const presentKeywords = [];
+  const missingKeywords = [];
+  
+  // Check which keywords are present in the resume
+  allPossibleKeywords.forEach(keyword => {
+    let isPresent = false;
+    
+    // Check if the keyword appears in any bullet point
+    resumeData.bullet_points.forEach(job => {
+      if (job.achievements) {
+        job.achievements.forEach(bullet => {
+          if (bullet.toLowerCase().includes(keyword.toLowerCase())) {
+            isPresent = true;
+          }
+        });
+      }
+    });
+    
+    if (isPresent) {
+      presentKeywords.push(keyword);
+    } else {
+      missingKeywords.push(keyword);
+    }
+  });
+  
+  // Generate ATS keywords list with presence status and priority
+  const generateAtsKeywords = () => {
+    const atsKeywords = [];
+    
+    // Add present keywords (3-5)
+    const presentCount = Math.min(presentKeywords.length, 5);
+    for (let i = 0; i < presentCount; i++) {
+      atsKeywords.push({
+        keyword: presentKeywords[i],
+        present: true,
+        priority: i < 2 ? "High" : "Medium"
+      });
+    }
+    
+    // Add missing keywords (8-10)
+    const missingCount = Math.min(missingKeywords.length, 10);
+    for (let i = 0; i < missingCount; i++) {
+      atsKeywords.push({
+        keyword: missingKeywords[i],
+        present: false,
+        priority: i < 3 ? "High" : i < 6 ? "Medium" : "Low"
+      });
+    }
+    
+    return atsKeywords;
+  };
+  
+  return {
+    success: true,
+    strengths: [
+      `Strong background in ${extractedSkills.slice(0, 3).join(", ") || "technical skills"}`,
+      achievements.length > 0 ? "Demonstrated success in delivering measurable results" : "Experience across multiple projects and responsibilities",
+      companies.length > 1 ? "Diverse experience across multiple organizations" : "Focused expertise in your industry"
+    ],
+    weaknesses: [
+      "Limited quantifiable achievements and metrics in bullet points",
+      "Some bullet points focus on responsibilities rather than accomplishments",
+      "Could better highlight leadership and initiative"
+    ],
+    areasForImprovement: [
+      "Add more specific metrics and quantifiable results to demonstrate impact",
+      "Focus on achievements rather than just listing responsibilities",
+      "Highlight problem-solving skills and specific challenges overcome"
+    ],
+    missingSkills: [
+      "Project management methodologies (Agile, Scrum)",
+      "Data analysis and visualization skills",
+      "Leadership and team management experience"
+    ],
+    recommendedRoles: [
+      latestPosition,
+      latestPosition.includes("Developer") ? "Full Stack Engineer" : "Technical Lead",
+      latestPosition.includes("Front") ? "UI/UX Developer" : "Software Architect", 
+      "Technical Project Manager"
+    ],
+    topIndustries: [
+      {
+        name: "Technology",
+        match: "High",
+        keySkills: extractedSkills.length > 0 ? extractedSkills.slice(0, 4) : ["JavaScript", "React", "Node.js", "Cloud Services"]
+      },
+      {
+        name: "Financial Services",
+        match: "Medium",
+        keySkills: ["Data Analysis", "Security Compliance", "API Integration"]
+      },
+      {
+        name: "E-commerce",
+        match: "High",
+        keySkills: ["UI/UX", "Payment Systems", "Web Development"]
+      },
+      {
+        name: "Healthcare IT",
+        match: "Medium",
+        keySkills: ["Data Security", "System Integration", "Compliance"]
+      }
+    ],
+    companies: {
+      major: [
+        "Google",
+        "Microsoft",
+        "Amazon",
+        "Apple",
+        "Meta",
+        "IBM",
+        "Salesforce",
+        "Adobe",
+        "Oracle",
+        "Shopify"
+      ],
+      promising: [
+        "Databricks",
+        "Notion",
+        "Vercel",
+        "Figma",
+        "HashiCorp",
+        "Airtable",
+        "Confluent",
+        "GitLab",
+        "Retool",
+        "Supabase"
+      ]
+    },
+    atsKeywords: generateAtsKeywords()
+  };
+};
+
+/**
  * Request rate limiter implementation
  */
 class RateLimiter {
@@ -311,6 +501,58 @@ export const ResumeAPI = {
     } catch (error) {
       console.error('Failed to parse resume:', error);
       throw new Error('Failed to parse resume. Please try again or upload a different file.');
+    }
+  },
+
+  /**
+   * Get AI-powered comprehensive resume analysis
+   * 
+   * @param {Object} resumeData - Structured resume data with bullet points
+   * @returns {Promise<{
+   *   strengths: string[],
+   *   weaknesses: string[],
+   *   areasForImprovement: string[],
+   *   missingSkills: string[],
+   *   recommendedRoles: string[],
+   *   topIndustries: Array<{name: string, match: string, keySkills: string[]}>,
+   *   companies: {major: string[], promising: string[]}
+   * }>}
+   * 
+   * Expected API Endpoint: POST /api/v1/resume/analyze
+   * Content-Type: application/json
+   */
+  async analyzeResume(resumeData) {
+    try {
+      if (API_CONFIG.useMockData) {
+        console.log("Using mock data for resume analysis");
+        await delay(1500); // Simulate AI processing time
+        
+        // Generate mock analysis based on the resume data
+        const mockAnalysis = generateMockAnalysis(resumeData);
+        return mockAnalysis;
+      }
+      
+      // Real API implementation:
+      console.log("Sending resume data to analysis API...");
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/resume/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resumeData }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.message || `API request failed with status ${response.status}`
+        );
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get resume analysis:', error);
+      throw new Error('Failed to generate resume analysis. Please try again later.');
     }
   },
 

@@ -10,13 +10,15 @@ export const useResumeService = () => {
   const [loading, setLoading] = useState({
     parse: false,
     improve: false,
-    export: false
+    export: false,
+    analyze: false
   });
   
   const [errors, setErrors] = useState({
     parse: null,
     improve: null,
-    export: null
+    export: null,
+    analyze: null
   });
 
   /**
@@ -55,6 +57,24 @@ export const useResumeService = () => {
       return null;
     } finally {
       setLoading(prev => ({ ...prev, improve: false }));
+    }
+  }, []);
+
+  /**
+   * Get AI-powered comprehensive resume analysis
+   */
+  const analyzeResume = useCallback(async (resumeData) => {
+    setLoading(prev => ({ ...prev, analyze: true }));
+    setErrors(prev => ({ ...prev, analyze: null }));
+    
+    try {
+      return await ResumeAPI.analyzeResume(resumeData);
+    } catch (error) {
+      console.error("Error in analyzeResume:", error);
+      setErrors(prev => ({ ...prev, analyze: error.message }));
+      return null;
+    } finally {
+      setLoading(prev => ({ ...prev, analyze: false }));
     }
   }, []);
 
@@ -107,6 +127,7 @@ export const useResumeService = () => {
     errors,
     parseResume,
     getAISuggestions,
+    analyzeResume,
     exportResume
   };
 };

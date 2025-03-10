@@ -485,6 +485,135 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
   }
 });
 
+// Endpoint to perform comprehensive resume analysis with Claude AI
+app.post('/api/v1/resume/analyze', async (req, res) => {
+  try {
+    const { resumeData } = req.body;
+    
+    if (!resumeData || !resumeData.bullet_points || !Array.isArray(resumeData.bullet_points)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid resume data with bullet points is required' 
+      });
+    }
+    
+    console.log('Resume analysis endpoint called');
+    console.log('Resume data contains', resumeData.bullet_points.length, 'job positions');
+    
+    // Prepare the resume data in a format that Claude can analyze
+    let formattedResume = '';
+    
+    // Add job positions and their bullet points
+    resumeData.bullet_points.forEach((job, index) => {
+      formattedResume += `POSITION ${index + 1}: ${job.position || 'Unknown Position'} at ${job.company || 'Unknown Company'}`;
+      if (job.time_period) {
+        formattedResume += ` (${job.time_period})`;
+      }
+      formattedResume += '\n\n';
+      
+      // Add bullet points
+      if (job.achievements && job.achievements.length > 0) {
+        job.achievements.forEach(bullet => {
+          formattedResume += `• ${bullet}\n`;
+        });
+        formattedResume += '\n';
+      }
+    });
+    
+    console.log('Formatted resume for analysis, length:', formattedResume.length);
+    console.log('First 200 chars:', formattedResume.substring(0, 200));
+    
+    // Define system prompt for resume analysis
+    const ANALYSIS_SYSTEM_PROMPT = `
+      You are an expert resume reviewer and career advisor who provides comprehensive analysis of resumes.
+      Your task is to analyze the given resume and provide detailed feedback in the following areas:
+      
+      1. Strengths - Identify 3-5 key strengths of the resume
+      2. Weaknesses - Identify 3-5 areas for improvement
+      3. Areas for Improvement - Provide 3-5 specific, actionable recommendations
+      4. Missing Skills - Identify 3-5 skills that would enhance the candidate's profile
+      5. Recommended Roles - Suggest 3-5 job roles that match their experience and skills
+      6. Top Industries - List 3-4 industries where their skills are in demand, with match rating (High/Medium/Low) and key skills for each
+      7. Companies to Apply To - Suggest both major companies (10) and promising growth companies (10) that would be good fits
+      8. ATS Keyword Optimization - Identify keywords that are likely used in ATS systems for the candidate's target roles. Include 5-8 keywords already present in the resume, and 8-10 important keywords that should be added
+      
+      Your response MUST be in valid JSON format with these exact keys:
+      {
+        "strengths": ["strength1", "strength2", ...],
+        "weaknesses": ["weakness1", "weakness2", ...],
+        "areasForImprovement": ["improvement1", "improvement2", ...],
+        "missingSkills": ["skill1", "skill2", ...],
+        "recommendedRoles": ["role1", "role2", ...],
+        "topIndustries": [
+          {"name": "industry1", "match": "High/Medium/Low", "keySkills": ["skill1", "skill2", ...]},
+          ...
+        ],
+        "companies": {
+          "major": ["company1", "company2", ...],
+          "promising": ["company1", "company2", ...]
+        },
+        "atsKeywords": [
+          {"keyword": "keyword1", "present": true/false, "priority": "High/Medium/Low"},
+          {"keyword": "keyword2", "present": true/false, "priority": "High/Medium/Low"},
+          ...
+        ]
+      }
+      
+      Only return the JSON object, nothing else. Ensure the JSON is valid and properly formatted.
+    `;
+    
+    // User prompt for Claude
+    const analysisPrompt = `
+      Please analyze the following resume and provide a comprehensive feedback:
+      
+      ${formattedResume}
+    `;
+    
+    // Call Claude API
+    console.log('Calling Claude API for resume analysis...');
+    const response = await callClaudeAPI({
+      prompt: analysisPrompt,
+      systemPrompt: ANALYSIS_SYSTEM_PROMPT,
+      temperature: 0.5,
+      maxTokens: 1500, // More tokens for comprehensive analysis
+    });
+    
+    console.log('Claude response received (first 200 chars):', response.substring(0, 200));
+    
+    // Parse the JSON response
+    try {
+      // Extract JSON from the response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+      
+      const analysisResult = JSON.parse(jsonMatch[0]);
+      console.log('Successfully parsed JSON response');
+      
+      // Add success flag to the response
+      analysisResult.success = true;
+      
+      // Return the analysis
+      res.json(analysisResult);
+    } catch (jsonError) {
+      console.error('Error parsing JSON response:', jsonError);
+      console.error('Raw response:', response);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to parse the analysis result',
+        error: jsonError.message
+      });
+    }
+  } catch (error) {
+    console.error('Error in resume analysis endpoint:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to analyze the resume' 
+    });
+  }
+});
+
 // Endpoint to export resume (mock implementation)
 app.post('/api/v1/resume/export', (req, res) => {
   const { bulletPoints, format = 'pdf', template = 'modern' } = req.body;
@@ -521,4 +650,5 @@ app.listen(port, () => {
   console.log(`Health Check: http://localhost:${port}/api/health`);
   console.log(`Test Resume Parsing (file): http://localhost:${port}/api/v1/resume/parse/test`);
   console.log(`Simple Test (no file upload): http://localhost:${port}/api/v1/resume/parse/simple`);
+  console.log(`Resume Analysis: http://localhost:${port}/api/v1/resume/analyze`);
 });
