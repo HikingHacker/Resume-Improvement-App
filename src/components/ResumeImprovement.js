@@ -869,143 +869,172 @@ const ResumeImprovement = () => {
               
               <div className="overflow-auto max-h-[45vh] p-4">
                 <div className="space-y-6">
-                  {jobs.map((job, jobIndex) => (
-                    <div key={jobIndex} className="space-y-4">
-                      {/* Job Card */}
-                      <div 
-                        className={`
-                          rounded-lg border p-4 transition-colors
-                          ${editingJobIndex === jobIndex ? 
-                            'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' :
-                            'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80'
-                          }
-                        `}
-                      >
-                        {/* Job details section */}
-                        {editingJobIndex === jobIndex ? (
-                          <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                            <div className="mb-2">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position</label>
-                              <Input 
-                                type="text" 
-                                value={editingJob.position}
-                                onChange={(e) => setEditingJob({...editingJob, position: e.target.value})}
-                              />
+                  {/* Job Selection First */}
+                  <div className="mb-6">
+                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">Select a Job Position:</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {jobs.map((job, jobIndex) => (
+                        <button 
+                          key={jobIndex}
+                          onClick={() => setCurrentJobIndex(jobIndex)}
+                          className={`
+                            p-4 rounded-lg border text-left transition-colors
+                            ${currentJobIndex === jobIndex 
+                              ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 shadow-md' 
+                              : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/80'
+                            }
+                          `}
+                        >
+                          <div className="flex items-start">
+                            <div className="bg-primary-100 dark:bg-primary-900 p-2 rounded-full mr-3 flex-shrink-0">
+                              <Building className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                             </div>
-                            <div className="mb-2">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company</label>
-                              <Input 
-                                type="text" 
-                                value={editingJob.company}
-                                onChange={(e) => setEditingJob({...editingJob, company: e.target.value})}
-                              />
-                            </div>
-                            <div className="mb-3">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Period</label>
-                              <Input 
-                                type="text" 
-                                value={editingJob.time_period || ""}
-                                onChange={(e) => setEditingJob({...editingJob, time_period: e.target.value})}
-                              />
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button 
-                                onClick={saveEditedJob} 
-                                variant="secondary"
-                                size="sm"
-                              >
-                                Save Changes
-                              </Button>
-                              <Button 
-                                onClick={() => {setEditingJobIndex(null); setEditingJob(null);}} 
-                                variant="ghost"
-                                size="sm"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div 
-                            className="mb-3 cursor-pointer" 
-                            onClick={() => startEditingJob(jobIndex)}
-                          >
-                            <div className="flex items-start">
-                              <div className="bg-primary-100 dark:bg-primary-900 p-2 rounded-full mr-3">
-                                <Building className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">{job.company}</h3>
+                              <div className="flex items-center">
+                                <Job className="w-4 h-4 mr-1 flex-shrink-0 text-gray-600 dark:text-gray-400" />
+                                <span className="text-gray-700 dark:text-gray-300 truncate">{job.position}</span>
                               </div>
-                              <div>
-                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">{job.company}</h3>
+                              {job.time_period && (
                                 <div className="flex items-center">
-                                  <Job className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                                  <span className="text-gray-700 dark:text-gray-300">{job.position}</span>
+                                  <Calendar className="w-4 h-4 mr-1 flex-shrink-0 text-gray-600 dark:text-gray-400" />
+                                  <span className="text-gray-700 dark:text-gray-300 truncate">{job.time_period}</span>
                                 </div>
-                                {job.time_period && (
-                                  <div className="flex items-center">
-                                    <Calendar className="w-4 h-4 mr-1 text-gray-600 dark:text-gray-400" />
-                                    <span className="text-gray-700 dark:text-gray-300">{job.time_period}</span>
-                                  </div>
-                                )}
-                                <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">Click to edit details</div>
+                              )}
+                              <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">
+                                {job.achievements?.length || 0} bullet point{(job.achievements?.length || 0) !== 1 ? 's' : ''}
                               </div>
                             </div>
-                          </div>
-                        )}
-                        
-                        {/* Bullet Points */}
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bullet Points:</h4>
-                          {job.achievements?.map((bullet, bulletIndex) => {
-                            const isSelected = currentJobIndex === jobIndex && currentBulletIndex === bulletIndex;
-                            const thisBulletId = getBulletId(jobIndex, bulletIndex);
-                            const hasImprovement = improvements[thisBulletId]?.improvedBulletPoint;
-                            const isSaved = savedBullets[thisBulletId];
-                            
-                            return (
-                              <div 
-                                key={bulletIndex} 
-                                className={`
-                                  p-3 rounded-md border transition-colors cursor-pointer relative
-                                  ${isSelected 
-                                    ? 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20' 
-                                    : isSaved
-                                      ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-                                      : hasImprovement
-                                        ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/10'
-                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                                  }
-                                `}
-                                onClick={() => {
-                                  setCurrentJobIndex(jobIndex);
-                                  setCurrentBulletIndex(bulletIndex);
-                                }}
-                              >
-                                <p className="text-sm text-gray-800 dark:text-gray-200">{bullet}</p>
-                                
-                                {isSaved && !isSelected && (
-                                  <div className="absolute top-2 right-2">
-                                    <div className="bg-green-100 dark:bg-green-800 p-1 rounded-full">
-                                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {hasImprovement && !isSaved && !isSelected && (
-                                  <div className="absolute top-2 right-2">
-                                    <div className="bg-yellow-100 dark:bg-yellow-800 p-1 rounded-full">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                      </svg>
-                                    </div>
-                                  </div>
-                                )}
+                            {currentJobIndex === jobIndex && (
+                              <div className="bg-primary-100 dark:bg-primary-900 rounded-full p-1 ml-2 flex-shrink-0">
+                                <CheckCircle className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                               </div>
-                            );
-                          })}
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Bullet Points Only Shown After Job Selection */}
+                  {currentJobIndex !== null && (
+                    <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-md font-medium text-gray-800 dark:text-gray-200">
+                          Bullet Points for {jobs[currentJobIndex]?.position} at {jobs[currentJobIndex]?.company}:
+                        </h4>
+                        <Button 
+                          onClick={() => startEditingJob(currentJobIndex)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                          Edit Details
+                        </Button>
+                      </div>
+                      
+                      {/* Edit Job Modal */}
+                      {editingJobIndex === currentJobIndex && (
+                        <div className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900">
+                          <div className="mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position</label>
+                            <Input 
+                              type="text" 
+                              value={editingJob.position}
+                              onChange={(e) => setEditingJob({...editingJob, position: e.target.value})}
+                            />
+                          </div>
+                          <div className="mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company</label>
+                            <Input 
+                              type="text" 
+                              value={editingJob.company}
+                              onChange={(e) => setEditingJob({...editingJob, company: e.target.value})}
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time Period</label>
+                            <Input 
+                              type="text" 
+                              value={editingJob.time_period || ""}
+                              onChange={(e) => setEditingJob({...editingJob, time_period: e.target.value})}
+                            />
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={saveEditedJob} 
+                              variant="secondary"
+                              size="sm"
+                            >
+                              Save Changes
+                            </Button>
+                            <Button 
+                              onClick={() => {setEditingJobIndex(null); setEditingJob(null);}} 
+                              variant="ghost"
+                              size="sm"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
+                      )}
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        {jobs[currentJobIndex]?.achievements?.map((bullet, bulletIndex) => {
+                          const isSelected = currentJobIndex !== null && currentBulletIndex === bulletIndex;
+                          const thisBulletId = getBulletId(currentJobIndex, bulletIndex);
+                          const hasImprovement = improvements[thisBulletId]?.improvedBulletPoint;
+                          const isSaved = savedBullets[thisBulletId];
+                          
+                          return (
+                            <div 
+                              key={bulletIndex} 
+                              className={`
+                                p-3 rounded-md border transition-colors cursor-pointer relative
+                                ${isSelected 
+                                  ? 'border-primary-400 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/30 shadow-md' 
+                                  : isSaved
+                                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                                    : hasImprovement
+                                      ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/10'
+                                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                }
+                              `}
+                              onClick={() => setCurrentBulletIndex(bulletIndex)}
+                            >
+                              <div className="flex items-start">
+                                <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 h-6 w-6 flex items-center justify-center rounded-full mr-2 flex-shrink-0 text-sm font-medium">
+                                  {bulletIndex + 1}
+                                </div>
+                                <p className="text-sm text-gray-800 dark:text-gray-200">{bullet}</p>
+                              </div>
+                              
+                              {isSaved && !isSelected && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="bg-green-100 dark:bg-green-800 p-1 rounded-full">
+                                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {hasImprovement && !isSaved && !isSelected && (
+                                <div className="absolute top-2 right-2">
+                                  <div className="bg-yellow-100 dark:bg-yellow-800 p-1 rounded-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
