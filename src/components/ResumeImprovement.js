@@ -1370,7 +1370,7 @@ const ResumeImprovement = () => {
             <span className="text-sm text-gray-500 dark:text-gray-400">Click any field to edit</span>
           </div>
           
-          <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          <div className="space-y-6 pr-2">
             {resumeData.bullet_points.map((job, jobIndex) => (
               <div key={jobIndex} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
                 {/* Job details section */}
