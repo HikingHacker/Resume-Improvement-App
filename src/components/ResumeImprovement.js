@@ -369,7 +369,10 @@ const ResumeImprovement = () => {
 
   const handleBulletPointImprovement = async () => {
     const currentBullet = getCurrentBulletPoint();
-    if (!currentBullet) return;
+    if (!currentBullet || currentJobIndex === null || currentBulletIndex === null) {
+      console.error("No bullet point selected for improvement");
+      return;
+    }
     
     const currentJob = resumeData.bullet_points[currentJobIndex];
     const bulletId = getCurrentBulletId();
@@ -1056,7 +1059,31 @@ const ResumeImprovement = () => {
                                       : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                 }
                               `}
-                              onClick={() => setCurrentBulletIndex(bulletIndex)}
+                              onClick={() => {
+                                // First update the current selections
+                                setCurrentBulletIndex(bulletIndex);
+                                
+                                // Store the current job and bullet index in local variables for the callback
+                                const thisJobIndex = currentJobIndex; // This is already set from the job selection
+                                const thisBulletIndex = bulletIndex;
+                                
+                                // Get the bullet ID for this specific bullet point
+                                const thisBulletId = getBulletId(thisJobIndex, thisBulletIndex);
+                                
+                                // We'll attempt auto-loading, but also provide the button as a fallback
+                                if (!improvements[thisBulletId]) {
+                                  // Use setTimeout to ensure state updates first
+                                  setTimeout(() => {
+                                    // At this point, currentJobIndex and currentBulletIndex should be updated
+                                    try {
+                                      handleBulletPointImprovement();
+                                    } catch (error) {
+                                      console.error("Auto-trigger failed:", error);
+                                      // The button will still be available if this fails
+                                    }
+                                  }, 100);
+                                }
+                              }}
                             >
                               <div className="flex items-start">
                                 <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 h-6 w-6 flex items-center justify-center rounded-full mr-2 flex-shrink-0 text-sm font-medium">
@@ -1110,6 +1137,18 @@ const ResumeImprovement = () => {
               </div>
               <div className="p-5 divide-y divide-gray-200 dark:divide-gray-700">
               {currentJobIndex !== null && currentBulletIndex !== null ? (
+                // Auto-trigger AI suggestions when bullet is displayed (if needed)
+                (() => {
+                  const bulletId = getCurrentBulletId();
+                  // Only trigger if we don't already have improvements for this bullet and not currently loading
+                  if (bulletId && !improvements[bulletId] && !loading.improve) {
+                    // Use requestAnimationFrame for better timing after render
+                    requestAnimationFrame(() => {
+                      handleBulletPointImprovement();
+                    });
+                  }
+                  return null;
+                })(),
                 <>
                   <div className="pb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Original Bullet Point</h3>
@@ -1117,15 +1156,26 @@ const ResumeImprovement = () => {
                       {jobs[currentJobIndex]?.achievements?.[currentBulletIndex] || "No bullet point selected"}
                     </div>
                     
-                    {!improvements[bulletId] && (
+                    {/* Show loading state when suggestions are being generated */}
+                    {!improvements[bulletId] && loading.improve && (
+                      <div className="mt-4 flex items-center text-primary-600 dark:text-primary-400">
+                        <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Generating AI suggestions...</span>
+                      </div>
+                    )}
+                    
+                    {/* Always keep the manual button as a fallback */}
+                    {!improvements[bulletId] && !loading.improve && (
                       <Button 
                         onClick={handleBulletPointImprovement} 
                         variant="primary"
-                        loading={loading.improve}
                         className="mt-4"
                       >
                         <Sparkles className="w-4 h-4 mr-2" />
-                        {loading.improve ? 'Processing...' : 'Get AI Suggestions'}
+                        Get AI Suggestions
                       </Button>
                     )}
                   </div>
