@@ -508,9 +508,21 @@ const ResumeImprovement = () => {
       const suggestions = await getAISuggestions(currentBullet, contextToSend);
       
       if (suggestions) {
+        // Make sure we have at least one suggestion, even if the multipleSuggestions array is empty
+        let finalSuggestions = suggestions.multipleSuggestions || [];
+        if (finalSuggestions.length === 0 && suggestions.improvedBulletPoint) {
+          finalSuggestions = [suggestions.improvedBulletPoint];
+        }
+        
+        // Store all suggestions and use the first one as the default
         setImprovements(prev => ({
           ...prev,
-          [bulletId]: suggestions
+          [bulletId]: {
+            ...suggestions,
+            multipleSuggestions: finalSuggestions,
+            selectedVariation: 0, // Default to first variation
+            currentlyEditing: finalSuggestions[0] || suggestions.improvedBulletPoint 
+          }
         }));
         setShowFollowUpForBullets(prev => ({
           ...prev,
@@ -1347,22 +1359,104 @@ const ResumeImprovement = () => {
                             disabled={loading.improve}
                           >
                             <Sparkles className="w-3.5 h-3.5 mr-1" />
-                            {loading.improve ? 'Regenerating...' : 'Regenerate'}
+                            {loading.improve ? 'Regenerating...' : `Generate ${improvements[bulletId]?.multipleSuggestions?.length > 1 ? 'New Variations' : 'Variations'}`}
                           </Button>
                         </div>
+                        {/* Display multiple suggestions to choose from if available */}
+                        {improvements[bulletId]?.multipleSuggestions && improvements[bulletId].multipleSuggestions.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Choose a variation:</h4>
+                            <div className="space-y-3">
+                              {improvements[bulletId].multipleSuggestions.map((suggestion, index) => (
+                                <div 
+                                  key={index}
+                                  className={`
+                                    p-3 rounded-lg border cursor-pointer transition-colors
+                                    ${improvements[bulletId].selectedVariation === index
+                                      ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/30 dark:border-primary-600 shadow-sm'
+                                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                    }
+                                  `}
+                                  onClick={() => {
+                                    // Update selected variation and the current editing text
+                                    const updatedImprovements = {...improvements};
+                                    updatedImprovements[bulletId] = {
+                                      ...updatedImprovements[bulletId],
+                                      selectedVariation: index,
+                                      currentlyEditing: suggestion,
+                                      improvedBulletPoint: suggestion // Update the main improvedBulletPoint as well
+                                    };
+                                    setImprovements(updatedImprovements);
+                                  }}
+                                >
+                                  <div className="flex items-start">
+                                    <div className={`
+                                      flex-shrink-0 w-6 h-6 rounded-full mr-2 flex items-center justify-center mt-0.5
+                                      ${improvements[bulletId].selectedVariation === index
+                                        ? 'bg-primary-500 text-white'
+                                        : 'bg-gray-200 dark:bg-gray-700'
+                                      }
+                                    `}>
+                                      {improvements[bulletId].selectedVariation === index ? (
+                                        <CheckCircle className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <span className="text-xs font-medium">{index + 1}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className={`text-sm ${improvements[bulletId].selectedVariation === index ? 'text-gray-900 dark:text-gray-100 font-medium' : 'text-gray-700 dark:text-gray-300'}`}>
+                                        {suggestion}
+                                      </p>
+                                      {improvements[bulletId].selectedVariation === index && (
+                                        <span className="text-xs text-primary-600 dark:text-primary-400 mt-1 block">
+                                          Selected variation
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center space-x-2 border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+                              <div className="bg-primary-100 dark:bg-primary-900/30 p-1.5 rounded-full">
+                                <Info className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                Select a variation above or edit the text directly below. Each variation offers a different approach or emphasis.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="mb-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {improvements[bulletId]?.selectedVariation !== undefined && improvements[bulletId]?.multipleSuggestions?.length > 0 
+                                ? `Edit Variation #${improvements[bulletId].selectedVariation + 1}` 
+                                : "Edit Improved Version"}
+                            </label>
+                            {improvements[bulletId]?.currentlyEditing !== improvements[bulletId]?.multipleSuggestions?.[improvements[bulletId]?.selectedVariation] && 
+                             improvements[bulletId]?.multipleSuggestions?.length > 0 && (
+                              <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                                <PenTool className="w-3 h-3 inline mr-1" />
+                                Custom edited
+                              </span>
+                            )}
+                          </div>
                           <Textarea
-                            value={improvements[bulletId]?.improvedBulletPoint || ""}
+                            value={improvements[bulletId]?.currentlyEditing || improvements[bulletId]?.improvedBulletPoint || ""}
                             onChange={(e) => {
                               const updatedImprovements = {...improvements};
                               updatedImprovements[bulletId] = {
                                 ...updatedImprovements[bulletId],
-                                improvedBulletPoint: e.target.value
+                                currentlyEditing: e.target.value,
+                                improvedBulletPoint: e.target.value // Update the main improved bullet point as well
                               };
                               setImprovements(updatedImprovements);
                             }}
                             rows={3}
                             className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 focus:border-green-300 dark:focus:border-green-700"
+                            placeholder="Edit this improved version or select a different variation above"
                           />
                         </div>
                         <div className="flex flex-wrap gap-3">

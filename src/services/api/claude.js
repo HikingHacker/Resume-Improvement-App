@@ -90,7 +90,8 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     
     Respond with ONLY a JSON object containing the following fields:
     - multipleSuggestions: An array of 3 distinct improved versions of the bullet point, each offering a different approach or emphasis
-    - reasoning: Brief explanation of the improvements you made in general
+    - reasoning: Brief explanation of the improvements you made and how each variation differs
+    - remainingWeaknesses: One or two specific areas where the bullet point could still be improved (be specific and constructive)
     - followUpQuestions: An array of 3 questions to elicit more information that could further improve the bullet point
   `;
 
@@ -99,14 +100,14 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     
     ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
     
-    Please improve this resume bullet point to make it more impactful and professional.
+    Please provide three different improved versions of this resume bullet point, each with a slightly different emphasis or approach. Make all versions impactful and professional.
   `;
 
   try {
     const response = await callClaudeAPI({
       prompt,
       systemPrompt,
-      temperature: 0.6, // Slightly more controlled response
+      temperature: 0.7, // Slightly higher temperature for more variety
     });
 
     // Extract JSON from the response
@@ -117,11 +118,18 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
 
     const parsedResponse = JSON.parse(jsonMatch[0]);
     
+    // Make sure we have at least one suggestion, even if the multipleSuggestions array is empty
+    let finalSuggestions = parsedResponse.multipleSuggestions || [];
+    if (finalSuggestions.length === 0 && parsedResponse.improvedBulletPoint) {
+      finalSuggestions = [parsedResponse.improvedBulletPoint];
+    }
+    
     return {
       success: true,
-      multipleSuggestions: parsedResponse.multipleSuggestions || [],
-      improvedBulletPoint: parsedResponse.multipleSuggestions ? parsedResponse.multipleSuggestions[0] : parsedResponse.improvedBulletPoint,
+      multipleSuggestions: finalSuggestions,
+      improvedBulletPoint: finalSuggestions[0] || parsedResponse.improvedBulletPoint,
       reasoning: parsedResponse.reasoning,
+      remainingWeaknesses: parsedResponse.remainingWeaknesses || "No specific weaknesses identified.",
       followUpQuestions: parsedResponse.followUpQuestions
     };
   } catch (error) {

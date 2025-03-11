@@ -114,8 +114,8 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
     5. Ensuring conciseness (ideally under 2 lines)
     
     Respond with ONLY a JSON object containing the following fields:
-    - improvedBulletPoint: The enhanced version of the bullet point
-    - reasoning: Brief explanation of the improvements you made
+    - multipleSuggestions: An array of 3 distinct improved versions of the bullet point, each offering a different approach or emphasis
+    - reasoning: Brief explanation of the improvements you made and how each variation differs
     - remainingWeaknesses: One or two specific areas where the bullet point could still be improved (be specific and constructive)
     - followUpQuestions: An array of 3 questions to elicit more information that could address the remaining weaknesses
   `;
@@ -125,14 +125,14 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
     
     ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
     
-    Please improve this resume bullet point to make it more impactful and professional.
+    Please provide three different improved versions of this resume bullet point, each with a slightly different emphasis or approach. Make all versions impactful and professional.
   `;
 
   try {
     const response = await callClaudeAPI({
       prompt,
       systemPrompt,
-      temperature: 0.6,
+      temperature: 0.7, // Slightly higher temperature for more variety
     });
 
     // Extract JSON from the response
@@ -145,7 +145,8 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
     
     return {
       success: true,
-      improvedBulletPoint: parsedResponse.improvedBulletPoint,
+      multipleSuggestions: parsedResponse.multipleSuggestions || [],
+      improvedBulletPoint: parsedResponse.multipleSuggestions ? parsedResponse.multipleSuggestions[0] : parsedResponse.improvedBulletPoint,
       reasoning: parsedResponse.reasoning,
       remainingWeaknesses: parsedResponse.remainingWeaknesses || "No specific weaknesses identified.",
       followUpQuestions: parsedResponse.followUpQuestions
