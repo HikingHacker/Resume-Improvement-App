@@ -168,7 +168,7 @@ const ResumeOverview = () => {
                     <div className="font-medium text-gray-900 dark:text-white">{job.position}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">{job.company}</div>
                     {job.time_period && (
-                      <div className="text-sm text-gray-500 dark:text-gray-500">{job.time_period}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{job.time_period}</div>
                     )}
                     <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">Click to edit details</div>
                   </div>

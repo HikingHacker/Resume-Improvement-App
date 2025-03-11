@@ -899,7 +899,7 @@ const ResumeImprovement = () => {
               </div>
               
               {/* Static Job Selection Header with Improved Stats - Always Visible */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                 <div className="mb-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -913,10 +913,10 @@ const ResumeImprovement = () => {
                             {Object.keys(savedBullets).length} 
                           </span>
                         </div>
-                        <span className="text-gray-500 dark:text-gray-500">/</span>
+                        <span className="text-gray-500 dark:text-gray-400">/</span>
                         <div className="flex items-center ml-1.5 text-gray-700 dark:text-gray-300">
                           <span>{getTotalBulletPoints()}</span>
-                          <span className="ml-1 text-gray-500 dark:text-gray-500">total</span>
+                          <span className="ml-1 text-gray-500 dark:text-gray-400">total</span>
                         </div>
                       </div>
                     </div>
@@ -981,7 +981,7 @@ const ResumeImprovement = () => {
                             <span className={progressPercent === 100 ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}>
                               {improvedJobBullets}
                             </span>
-                            <span className="mx-0.5 text-gray-500">/</span>
+                            <span className="mx-0.5 text-gray-500 dark:text-gray-400">/</span>
                             <span className="text-gray-700 dark:text-gray-300">
                               {totalJobBullets}
                             </span>
@@ -998,7 +998,7 @@ const ResumeImprovement = () => {
                 <div className="space-y-6">
                   {/* Bullet Points Only Shown After Job Selection */}
                   {currentJobIndex !== null && (
-                    <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm">
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 shadow-sm">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="text-md font-medium text-gray-800 dark:text-gray-200">
                           Bullet Points for {jobs[currentJobIndex]?.position} at {jobs[currentJobIndex]?.company}:
@@ -1356,7 +1356,7 @@ const ResumeImprovement = () => {
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4">
+                  <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-full mb-4">
                     <Sparkles className="w-8 h-8 text-gray-500 dark:text-gray-400" />
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -1603,7 +1603,7 @@ const ResumeImprovement = () => {
                     <div className="font-medium text-gray-900 dark:text-white">{job.position}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">{job.company}</div>
                     {job.time_period && (
-                      <div className="text-sm text-gray-500 dark:text-gray-500">{job.time_period}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{job.time_period}</div>
                     )}
                     <div className="mt-1 text-xs text-primary-600 dark:text-primary-400">Click to edit details</div>
                   </div>
