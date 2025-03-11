@@ -163,7 +163,7 @@ const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStep
 
 const ResumeImprovement = () => {
   const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume } = useResumeService();
-  const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 4: final review
+  const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 3.5: improvement analytics, 4: final review
   const [resumeData, setResumeData] = useState({ bullet_points: [] });
   const [flatBulletPoints, setFlatBulletPoints] = useState([]);
   const [currentJobIndex, setCurrentJobIndex] = useState(null);
@@ -488,8 +488,9 @@ const ResumeImprovement = () => {
       }
       // At the very last bullet point
       else {
-        // Move to final review
-        setStep(4);
+        // Move to improvement analytics instead of final review
+        window.scrollTo(0, 0);
+        setStep(3.5);
       }
     } else if (direction === 'prev') {
       // If not at the first bullet point in the current job
@@ -514,6 +515,7 @@ const ResumeImprovement = () => {
     { value: 2, label: "Resume Overview", icon: <FileText className="w-4 h-4" /> },
     { value: 2.5, label: "Resume Analysis", icon: <LineChart className="w-4 h-4" /> },
     { value: 3, label: "Improve Bullets", icon: <Zap className="w-4 h-4" /> },
+    { value: 3.5, label: "Improvement Review", icon: <CheckCircle className="w-4 h-4" /> },
     { value: 4, label: "Final Overview", icon: <Layers className="w-4 h-4" /> }
   ];
   
@@ -572,9 +574,12 @@ const ResumeImprovement = () => {
       } else if (step === 3) {
         // From bullet improvement back to analysis
         setStep(2.5);
-      } else if (step === 4) {
-        // From final review back to bullet improvement
+      } else if (step === 3.5) {
+        // From improvement review back to bullet improvement
         setStep(3);
+      } else if (step === 4) {
+        // From final review back to improvement review
+        setStep(3.5);
         
         // Go to the last bullet point
         const jobs = resumeData.bullet_points;
@@ -1375,6 +1380,251 @@ const ResumeImprovement = () => {
     );
   };
 
+  // New function to render the improvement analytics screen
+  const renderImprovementAnalytics = () => {
+    // Calculate improvement statistics
+    const totalBullets = getTotalBulletPoints();
+    const improvedBullets = Object.keys(savedBullets).length;
+    const improvementPercentage = totalBullets > 0 ? Math.round((improvedBullets / totalBullets) * 100) : 0;
+    
+    // Count stats by job
+    const jobStats = resumeData.bullet_points.map((job, jobIndex) => {
+      const totalJobBullets = job.achievements?.length || 0;
+      const improvedJobBullets = job.achievements?.reduce((count, _, bulletIndex) => {
+        const bulletId = getBulletId(jobIndex, bulletIndex);
+        return savedBullets[bulletId] ? count + 1 : count;
+      }, 0) || 0;
+      
+      return {
+        company: job.company,
+        position: job.position,
+        totalBullets: totalJobBullets,
+        improvedBullets: improvedJobBullets,
+        percentage: totalJobBullets > 0 ? Math.round((improvedJobBullets / totalJobBullets) * 100) : 0
+      };
+    });
+    
+    // Identify improvement themes (what kinds of improvements were made)
+    const improvementThemes = [
+      { theme: "Quantification Added", count: 0 },
+      { theme: "Action Verbs Enhanced", count: 0 },
+      { theme: "Technical Skills Highlighted", count: 0 },
+      { theme: "Impact Statements Added", count: 0 },
+      { theme: "Improved Clarity", count: 0 },
+    ];
+    
+    // This would be more sophisticated in a real implementation
+    // Here we're just doing a simplistic analysis based on keywords
+    Object.entries(improvements).forEach(([bulletId, improvement]) => {
+      if (savedBullets[bulletId] && improvement?.improvedBulletPoint) {
+        const improved = improvement.improvedBulletPoint.toLowerCase();
+        
+        // Check for quantification (numbers, percentages)
+        if (/\d+%|\d+\s+percent|increased by|decreased by|reduced by|improved by|\$\d+|\d+x/i.test(improved)) {
+          improvementThemes[0].count++;
+        }
+        
+        // Check for strong action verbs
+        if (/implemented|developed|created|designed|led|managed|established|achieved|delivered|launched/i.test(improved)) {
+          improvementThemes[1].count++;
+        }
+        
+        // Check for technical skills
+        if (/api|framework|system|platform|software|technology|database|sql|python|javascript|react|cloud/i.test(improved)) {
+          improvementThemes[2].count++;
+        }
+        
+        // Check for impact statements
+        if (/resulting in|led to|enabling|which allowed|impact|outcome|benefit/i.test(improved)) {
+          improvementThemes[3].count++;
+        }
+        
+        // Check for improved clarity (this is more subjective)
+        if (improvement.improvedBulletPoint.length < originalBullets[bulletId]?.length * 0.9 || 
+            improvement.improvedBulletPoint.split(' ').length < originalBullets[bulletId]?.split(' ').length) {
+          improvementThemes[4].count++;
+        }
+      }
+    });
+    
+    // Sort improvement themes by count
+    improvementThemes.sort((a, b) => b.count - a.count);
+    
+    // Get top further improvement recommendations
+    const furtherImprovements = [
+      "Add more quantifiable achievements (numbers, percentages, dollar amounts)",
+      "Ensure all bullet points start with strong action verbs",
+      "Highlight technical skills relevant to your target roles",
+      "Connect achievements to business outcomes and impact",
+      "Remove unnecessary words and phrases for clarity",
+      "Tailor bullet points to specific job requirements",
+      "Add more industry-specific keywords for ATS optimization"
+    ];
+    
+    return (
+      <Card className="w-full shadow-md transition-colors duration-200">
+        <CardHeader>
+          <CardTitle className="text-xl mb-2">Improvement Analytics</CardTitle>
+          <CardDescription>
+            Review the improvements made to your resume and get recommendations for further refinement.
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent className="space-y-8">
+          {/* Overall Improvement Statistics */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+              <LineChart className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+              Overall Improvement Progress
+            </h3>
+            
+            <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-100 dark:border-primary-800">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm flex flex-col items-center">
+                  <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">{improvementPercentage}%</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Overall Completion</div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm flex flex-col items-center">
+                  <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">{improvedBullets}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Bullets Improved</div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm flex flex-col items-center">
+                  <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">{totalBullets}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Total Bullet Points</div>
+                </div>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="mt-4">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600 dark:text-gray-400">Progress</span>
+                  <span className="text-gray-800 dark:text-gray-200">{improvedBullets}/{totalBullets}</span>
+                </div>
+                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
+                  <div 
+                    className="h-3 bg-primary-600 dark:bg-primary-500 rounded-full"
+                    style={{ width: `${improvementPercentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Improvement by Position */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+              <Briefcase className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+              Improvement by Position
+            </h3>
+            
+            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Position</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead className="text-center">Improved</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                    <TableHead className="text-right">Progress</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobStats.map((stat, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{stat.position}</TableCell>
+                      <TableCell>{stat.company}</TableCell>
+                      <TableCell className="text-center">{stat.improvedBullets}</TableCell>
+                      <TableCell className="text-center">{stat.totalBullets}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end">
+                          <span 
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              stat.percentage === 100 
+                                ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300' 
+                                : stat.percentage > 50
+                                  ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-primary-300'
+                                  : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300'
+                            }`}
+                          >
+                            {stat.percentage}%
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          
+          {/* Improvement Themes */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+              <Sparkles className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+              Improvement Themes Detected
+            </h3>
+            
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-100 dark:border-green-800">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {improvementThemes.map((theme, index) => (
+                  <div key={index} className="flex items-center">
+                    <div className="bg-green-100 dark:bg-green-800 p-1.5 rounded-full mr-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <span className="text-gray-800 dark:text-gray-200">{theme.theme}</span>
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-300">
+                        {theme.count} {theme.count === 1 ? 'bullet' : 'bullets'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Further Recommendations */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+              <ArrowRight className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" />
+              Recommendations for Further Improvement
+            </h3>
+            
+            <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-100 dark:border-primary-800">
+              <ul className="space-y-2">
+                {furtherImprovements.map((improvement, index) => (
+                  <li key={index} className="flex items-start">
+                    <span className="text-primary-600 dark:text-primary-400 mr-2 mt-0.5">•</span>
+                    <span className="text-gray-800 dark:text-gray-200">{improvement}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          
+          {/* Continue button */}
+          <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Review your improved resume in the final overview before downloading.
+            </p>
+            <Button 
+              onClick={() => {
+                window.scrollTo(0, 0);
+                setStep(4);
+              }} 
+              variant="primary"
+              className="w-full"
+            >
+              Continue to Final Overview
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderFinalReview = () => {
     return (
       <Card className="w-full shadow-md transition-colors duration-200">
@@ -2134,6 +2384,14 @@ const ResumeImprovement = () => {
               onClick={() => {
                 window.scrollTo(0, 0);
                 setStep(3);
+                // Initialize selection to first bullet if needed
+                if (currentJobIndex === null || currentBulletIndex === null) {
+                  const jobs = resumeData.bullet_points;
+                  if (jobs.length > 0) {
+                    setCurrentJobIndex(0);
+                    setCurrentBulletIndex(0);
+                  }
+                }
               }} 
               variant="primary"
               className="w-full"
@@ -2266,6 +2524,8 @@ const ResumeImprovement = () => {
         return renderResumeAnalysis();
       case 3:
         return renderBulletImprovement();
+      case 3.5:
+        return renderImprovementAnalytics();
       case 4:
         return renderFinalReview();
       default:
