@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Skeleton, SkeletonText } from './ui/Skeleton';
 import { useTheme } from './ui/ThemeProvider';
 import useResumeService from '../services/hooks/useResumeService';
+import AddMissingSkills from './steps/AddMissingSkills';
 
 const ConfirmationModal = ({ isOpen, onConfirm, onCancel }) => {
   // Handle keyboard events for accessibility
@@ -163,7 +164,7 @@ const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStep
 
 const ResumeImprovement = () => {
   const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume, getImprovementAnalytics } = useResumeService();
-  const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 3.5: improvement analytics, 4: final review
+  const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 3.5: improvement analytics, 3.75: add missing skills, 4: final review
   const [resumeData, setResumeData] = useState({ bullet_points: [] });
   const [flatBulletPoints, setFlatBulletPoints] = useState([]);
   const [currentJobIndex, setCurrentJobIndex] = useState(null);
@@ -178,6 +179,13 @@ const ResumeImprovement = () => {
   const [resumeEdited, setResumeEdited] = useState(false);
   // State for AI analytics recommendations
   const [aiRecommendations, setAiRecommendations] = useState(null);
+  
+  // State for managing missing skills bullets
+  const [newSkillBullets, setNewSkillBullets] = useState({});
+  const [selectedSkillCategory, setSelectedSkillCategory] = useState(null);
+  const [selectedSkill, setSelectedSkill] = useState(null);
+  const [targetJobForSkill, setTargetJobForSkill] = useState(null);
+  const [generatingSkillBullet, setGeneratingSkillBullet] = useState(false);
   
   // State for editing job details in overview
   const [editingJobIndex, setEditingJobIndex] = useState(null);
@@ -208,6 +216,64 @@ const ResumeImprovement = () => {
       setLoading(prev => ({ ...prev, analytics: false }));
     }
   };
+  
+  // Function to generate a new bullet point for a missing skill using Claude AI
+  const generateSkillBullet = async (skillName, skillRecommendation, jobDetails) => {
+    try {
+      setGeneratingSkillBullet(true);
+      
+      // Create a unique ID for this skill+job combination
+      const skillId = `${skillName}-${jobDetails.company}-${jobDetails.position}`.replace(/\s+/g, '-').toLowerCase();
+      
+      // Check if we already have generated this bullet before
+      if (newSkillBullets[skillId]) {
+        return newSkillBullets[skillId];
+      }
+      
+      // Create a prompt for Claude to generate a bullet point
+      const context = `
+        Generate a strong resume bullet point that demonstrates the skill "${skillName}" for a person in the following role:
+        Position: ${jobDetails.position}
+        Company: ${jobDetails.company}
+        Time Period: ${jobDetails.time_period || 'Current'}
+        
+        The bullet point should:
+        1. Start with a strong action verb
+        2. Include specific metrics or quantifiable achievements (you can make up reasonable numbers)
+        3. Show impact and results
+        4. Be concise (1-2 lines)
+        5. Incorporate relevant technical terms if applicable
+        
+        Skill recommendation context: ${skillRecommendation}
+      `;
+      
+      // Use the bullet improvement service but with our custom context
+      const result = await getAISuggestions(`Add a bullet point for ${skillName}`, context);
+      
+      if (result && result.improvedBulletPoint) {
+        // Store the generated bullet for this skill+job
+        const bulletPoint = result.improvedBulletPoint.replace(/^•\s*/, ''); // Remove bullet marker if present
+        setNewSkillBullets(prev => ({
+          ...prev,
+          [skillId]: {
+            bullet: bulletPoint,
+            skill: skillName,
+            jobIndex: resumeData.bullet_points.findIndex(j => j.company === jobDetails.company && j.position === jobDetails.position),
+            category: selectedSkillCategory
+          }
+        }));
+        return bulletPoint;
+      } else {
+        throw new Error("Failed to generate bullet point");
+      }
+    } catch (error) {
+      console.error("Error generating skill bullet:", error);
+      setErrors(prev => ({ ...prev, generate: "Failed to generate bullet point. Please try again." }));
+      return null;
+    } finally {
+      setGeneratingSkillBullet(false);
+    }
+  };
 
   const resetState = () => {
     setStep(0);
@@ -226,6 +292,11 @@ const ResumeImprovement = () => {
     setSavedBullets({});
     setOriginalBullets({});
     setAiRecommendations(null);
+    setNewSkillBullets({});
+    setSelectedSkillCategory(null);
+    setSelectedSkill(null);
+    setTargetJobForSkill(null);
+    setGeneratingSkillBullet(false);
   };
 
   const handleFileUpload = async (event) => {
@@ -543,6 +614,7 @@ const ResumeImprovement = () => {
     { value: 2.5, label: "Resume Analysis", icon: <LineChart className="w-4 h-4" /> },
     { value: 3, label: "Improve Bullets", icon: <Zap className="w-4 h-4" /> },
     { value: 3.5, label: "Improvement Review", icon: <CheckCircle className="w-4 h-4" /> },
+    { value: 3.75, label: "Add Missing Skills", icon: <PenTool className="w-4 h-4" /> },
     { value: 4, label: "Final Overview", icon: <Layers className="w-4 h-4" /> }
   ];
   
@@ -604,20 +676,12 @@ const ResumeImprovement = () => {
       } else if (step === 3.5) {
         // From improvement review back to bullet improvement
         setStep(3);
-      } else if (step === 4) {
-        // From final review back to improvement review
+      } else if (step === 3.75) {
+        // From add missing skills back to improvement review
         setStep(3.5);
-        
-        // Go to the last bullet point
-        const jobs = resumeData.bullet_points;
-        if (jobs.length > 0) {
-          const lastJobIndex = jobs.length - 1;
-          const lastJob = jobs[lastJobIndex];
-          if (lastJob && lastJob.achievements) {
-            setCurrentJobIndex(lastJobIndex);
-            setCurrentBulletIndex(Math.max(0, lastJob.achievements.length - 1));
-          }
-        }
+      } else if (step === 4) {
+        // From final review back to missing skills
+        setStep(3.75);
       } else if (step > 0) {
         setStep(step - 1);
       }
@@ -647,6 +711,12 @@ const ResumeImprovement = () => {
               setCurrentBulletIndex(0);
             }
           }
+        } else if (step === 3.5) {
+          // From improvement review to add missing skills
+          setStep(3.75);
+        } else if (step === 3.75) {
+          // From add missing skills to final review
+          setStep(4);
         } else {
           setStep(step + 1);
         }
@@ -1739,12 +1809,12 @@ const ResumeImprovement = () => {
             <Button 
               onClick={() => {
                 window.scrollTo(0, 0);
-                setStep(4);
+                setStep(3.75);
               }} 
               variant="primary"
               className="w-full"
             >
-              Continue to Final Overview
+              Add Missing Skills to Resume
             </Button>
           </div>
         </CardContent>
@@ -2536,6 +2606,42 @@ const ResumeImprovement = () => {
     );
   };
 
+  // Function to save a new skill bullet to the resume
+  const saveNewSkillBullet = (skillId, bulletText, targetJobForSkill) => {
+    try {
+      if (!skillId || !bulletText || !targetJobForSkill) return;
+      
+      // Find the job index
+      const jobIndex = resumeData.bullet_points.findIndex(job => 
+        job.company === targetJobForSkill.company && job.position === targetJobForSkill.position);
+      
+      if (jobIndex === -1) return;
+      
+      // Add the bullet to the resume data
+      const updatedJobs = [...resumeData.bullet_points];
+      updatedJobs[jobIndex].achievements = [...updatedJobs[jobIndex].achievements, bulletText];
+      setResumeData({...resumeData, bullet_points: updatedJobs});
+      
+      // Update the newSkillBullets state
+      setNewSkillBullets(prev => ({
+        ...prev,
+        [skillId]: {
+          ...prev[skillId],
+          bullet: bulletText,
+          jobIndex: jobIndex,
+          added: true
+        }
+      }));
+      
+      // Mark resume as edited
+      setResumeEdited(true);
+      
+      console.log(`Added new bullet for skill ${skillId} to job ${targetJobForSkill.position}`);
+    } catch (error) {
+      console.error("Error saving new skill bullet:", error);
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case 0:
@@ -2658,6 +2764,31 @@ const ResumeImprovement = () => {
         return renderBulletImprovement();
       case 3.5:
         return renderImprovementAnalytics();
+      case 3.75:
+        return (
+          <AddMissingSkills
+            resumeData={resumeData}
+            aiRecommendations={aiRecommendations}
+            targetJobForSkill={targetJobForSkill}
+            setTargetJobForSkill={setTargetJobForSkill}
+            selectedSkillCategory={selectedSkillCategory}
+            setSelectedSkillCategory={setSelectedSkillCategory}
+            selectedSkill={selectedSkill}
+            setSelectedSkill={setSelectedSkill}
+            newSkillBullets={newSkillBullets}
+            generateSkillBullet={generateSkillBullet}
+            generatingSkillBullet={generatingSkillBullet}
+            saveNewSkillBullet={saveNewSkillBullet}
+            onNext={() => {
+              window.scrollTo(0, 0);
+              setStep(4);
+            }}
+            onBack={() => {
+              window.scrollTo(0, 0);
+              setStep(3.5);
+            }}
+          />
+        );
       case 4:
         return renderFinalReview();
       default:
