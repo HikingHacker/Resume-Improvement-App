@@ -1318,10 +1318,38 @@ const ResumeImprovement = () => {
                   {improvements[bulletId] && (
                     <>
                       <div className="py-4">
-                        <h3 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-2 flex items-center">
-                          <CheckCircle className="w-5 h-5 mr-2" />
-                          Improved Version
-                        </h3>
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="text-lg font-semibold text-green-700 dark:text-green-400 flex items-center">
+                            <CheckCircle className="w-5 h-5 mr-2" />
+                            Improved Version
+                          </h3>
+                          <Button
+                            onClick={() => {
+                              // Clear existing improvements first
+                              const currentBullet = getCurrentBulletPoint();
+                              if (currentBullet && currentJobIndex !== null && currentBulletIndex !== null) {
+                                const currentJob = resumeData.bullet_points[currentJobIndex];
+                                // Remove from improvements to trigger regeneration
+                                setImprovements(prev => {
+                                  const newImprovements = {...prev};
+                                  delete newImprovements[bulletId];
+                                  return newImprovements;
+                                });
+                                // Set loading state
+                                setLoading(prev => ({...prev, improve: true}));
+                                // Trigger generation after a short delay to ensure state is updated
+                                setTimeout(() => handleBulletPointImprovement(), 100);
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="text-primary-600 dark:text-primary-400 border-primary-300 dark:border-primary-700"
+                            disabled={loading.improve}
+                          >
+                            <Sparkles className="w-3.5 h-3.5 mr-1" />
+                            {loading.improve ? 'Regenerating...' : 'Regenerate'}
+                          </Button>
+                        </div>
                         <div className="mb-3">
                           <Textarea
                             value={improvements[bulletId]?.improvedBulletPoint || ""}
