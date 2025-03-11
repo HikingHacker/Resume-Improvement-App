@@ -69,5 +69,7 @@ module.exports = {
       shadowColor: ['dark', 'dark:hover', 'hover', 'focus'],
     },
   },
-  plugins: [],
+  plugins: [
+    require('tailwindcss-animate'), // Add animation utilities
+  ],
 }

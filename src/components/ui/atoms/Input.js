@@ -1,8 +1,23 @@
-// components/ui/input.js
 import React, { forwardRef } from 'react';
+import PropTypes from 'prop-types';
 
+/**
+ * Input component for collecting user data
+ * 
+ * @param {Object} props - Component props
+ * @param {string} props.className - Additional CSS classes
+ * @param {string} props.error - Error message
+ * @param {string} props.label - Input label
+ * @param {string} props.helperText - Helper text displayed below input
+ * @param {string} props.id - Input ID
+ * @param {boolean} props.fullWidth - Whether input should take full width
+ * @param {React.ReactNode} props.startIcon - Icon displayed at start of input
+ * @param {React.ReactNode} props.endIcon - Icon displayed at end of input
+ * @param {boolean} props.required - Whether input is required
+ * @returns {JSX.Element} Input component
+ */
 const Input = forwardRef(({ 
-  className, 
+  className = '', 
   error, 
   label, 
   helperText, 
@@ -10,7 +25,7 @@ const Input = forwardRef(({
   fullWidth = true, 
   startIcon,
   endIcon,
-  required,
+  required = false,
   ...props 
 }, ref) => {
   // Generate a unique ID if one is not provided
@@ -51,7 +66,7 @@ const Input = forwardRef(({
             py-2
           `}
           aria-invalid={error ? 'true' : 'false'}
-          aria-describedby={helperText ? `${inputId}-helper-text` : undefined}
+          aria-describedby={helperText || error ? `${inputId}-helper-text` : undefined}
           required={required}
           {...props}
         />
@@ -74,6 +89,24 @@ const Input = forwardRef(({
     </div>
   );
 });
+
+Input.propTypes = {
+  className: PropTypes.string,
+  error: PropTypes.string,
+  label: PropTypes.string,
+  helperText: PropTypes.string,
+  id: PropTypes.string,
+  fullWidth: PropTypes.bool,
+  startIcon: PropTypes.node,
+  endIcon: PropTypes.node,
+  required: PropTypes.bool,
+  onChange: PropTypes.func,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  placeholder: PropTypes.string,
+  type: PropTypes.string,
+  disabled: PropTypes.bool,
+  name: PropTypes.string
+};
 
 Input.displayName = 'Input';
 

@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
+import PropTypes from 'prop-types';
 import { AlertTriangle } from 'lucide-react';
-import Button from './Button';
 
 /**
  * Error Boundary component to catch JavaScript errors anywhere in the child component tree
@@ -27,7 +27,9 @@ class ErrorBoundary extends Component {
     this.setState({ errorInfo });
     
     // You could also log the error to a reporting service here
-    // logErrorToService(error, errorInfo);
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    }
   }
 
   resetError = () => {
@@ -39,8 +41,17 @@ class ErrorBoundary extends Component {
   }
 
   render() {
+    const { children, fallback } = this.props;
+    
     if (this.state.hasError) {
-      // Render fallback UI
+      // If custom fallback is provided, use it
+      if (fallback) {
+        return typeof fallback === 'function' 
+          ? fallback(this.state.error, this.state.errorInfo, this.resetError)
+          : fallback;
+      }
+      
+      // Default fallback UI
       return (
         <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
           <div className="flex items-center mb-4">
@@ -67,23 +78,35 @@ class ErrorBoundary extends Component {
           </div>
           
           <div className="flex space-x-3">
-            <Button onClick={this.resetError} variant="primary">
+            <button 
+              onClick={this.resetError}
+              className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
               Try Again
-            </Button>
-            <Button 
+            </button>
+            <button 
               onClick={() => window.location.reload()}
-              variant="outline"
+              className="px-4 py-2 border border-primary-600 text-primary-600 rounded hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               Reload Page
-            </Button>
+            </button>
           </div>
         </div>
       );
     }
 
     // If there's no error, render children normally
-    return this.props.children;
+    return children;
   }
 }
+
+ErrorBoundary.propTypes = {
+  children: PropTypes.node.isRequired,
+  fallback: PropTypes.oneOfType([
+    PropTypes.node,
+    PropTypes.func
+  ]),
+  onError: PropTypes.func
+};
 
 export default ErrorBoundary;

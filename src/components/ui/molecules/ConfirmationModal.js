@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { X, AlertTriangle } from 'lucide-react';
-import Button from './Button';
+import { cn } from '../utils/utils';
+import { VARIANTS } from '../utils/constants';
 
 /**
  * Reusable confirmation modal component with keyboard support
@@ -14,6 +16,7 @@ import Button from './Button';
  * @param {string} props.confirmText - Text for confirm button
  * @param {string} props.cancelText - Text for cancel button
  * @param {string} props.confirmVariant - Button variant for confirm button
+ * @param {string} props.className - Additional CSS classes for the modal container
  */
 const ConfirmationModal = ({ 
   isOpen, 
@@ -23,7 +26,8 @@ const ConfirmationModal = ({
   message = "Are you sure you want to continue? This action cannot be undone.",
   confirmText = "Confirm",
   cancelText = "Cancel",
-  confirmVariant = "danger"
+  confirmVariant = "danger",
+  className = "",
 }) => {
   // Handle keyboard events for accessibility
   useEffect(() => {
@@ -48,9 +52,20 @@ const ConfirmationModal = ({
   
   if (!isOpen) return null;
 
+  // Determine button variant classes based on confirmVariant
+  const buttonVariants = {
+    primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
+    secondary: 'bg-secondary-600 text-white hover:bg-secondary-700 focus:ring-secondary-500',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    ghost: 'bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+  };
+
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
+      className={cn(
+        "fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in",
+        className
+      )}
       onClick={onCancel} // Allow clicking outside to close
       role="dialog"
       aria-modal="true"
@@ -85,24 +100,39 @@ const ConfirmationModal = ({
         </div>
         
         <div className="flex justify-end space-x-3">
-          <Button 
+          <button 
             onClick={onCancel} 
-            variant="ghost"
+            className="px-4 py-2 rounded bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
             aria-label="Cancel and close dialog"
           >
             {cancelText}
-          </Button>
-          <Button 
+          </button>
+          <button 
             onClick={onConfirm} 
-            variant={confirmVariant}
+            className={cn(
+              "px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors",
+              buttonVariants[confirmVariant] || buttonVariants.danger
+            )}
             aria-label="Confirm action"
           >
             {confirmText}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
   );
+};
+
+ConfirmationModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onConfirm: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  title: PropTypes.string,
+  message: PropTypes.node,
+  confirmText: PropTypes.string,
+  cancelText: PropTypes.string,
+  confirmVariant: PropTypes.oneOf(Object.keys(VARIANTS)),
+  className: PropTypes.string
 };
 
 export default ConfirmationModal;

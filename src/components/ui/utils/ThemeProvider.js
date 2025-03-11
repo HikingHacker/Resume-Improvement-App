@@ -1,17 +1,29 @@
-// components/ui/ThemeProvider.js
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
 
-// Create theme context
+/**
+ * Context for theme management
+ */
 const ThemeContext = createContext({
   theme: 'light',
   setTheme: () => {},
   toggleTheme: () => {},
 });
 
-// Hook to use theme
+/**
+ * Hook to use theme functionality
+ * @returns {Object} Theme context value
+ */
 export const useTheme = () => useContext(ThemeContext);
 
-export const ThemeProvider = ({ children }) => {
+/**
+ * ThemeProvider component for managing application theme
+ * 
+ * @param {Object} props - Component props
+ * @param {React.ReactNode} props.children - Child components
+ * @returns {JSX.Element} ThemeProvider component
+ */
+const ThemeProvider = ({ children }) => {
   // Check local storage or system preference for initial theme
   const [theme, setTheme] = useState('light'); // Start with a default to avoid hydration mismatch
 
@@ -82,21 +94,8 @@ export const ThemeProvider = ({ children }) => {
 
   // Toggle theme function
   const toggleTheme = () => {
-    try {
-      setTheme(prevTheme => {
-        const newTheme = prevTheme === 'light' ? 'dark' : 'light';
-        console.log('Toggling theme from', prevTheme, 'to', newTheme);
-        return newTheme;
-      });
-    } catch (error) {
-      console.error('Error toggling theme:', error);
-    }
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
-
-  // Log current theme for debugging
-  useEffect(() => {
-    console.log('Current theme:', theme);
-  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
@@ -105,22 +104,20 @@ export const ThemeProvider = ({ children }) => {
   );
 };
 
-// Theme toggle button component
-export const ThemeToggle = ({ className }) => {
+/**
+ * Theme toggle button component
+ * 
+ * @param {Object} props - Component props
+ * @param {string} props.className - Additional CSS classes
+ * @returns {JSX.Element} ThemeToggle component
+ */
+const ThemeToggle = ({ className = '' }) => {
   const { theme, toggleTheme } = useTheme();
-  
-  // Use useEffect to log when the component renders with what theme
-  useEffect(() => {
-    console.log('ThemeToggle rendered with theme:', theme);
-  }, [theme]);
   
   return (
     <button
       type="button"
-      onClick={() => {
-        console.log('Toggle button clicked, current theme:', theme);
-        toggleTheme();
-      }}
+      onClick={toggleTheme}
       className={`p-2 rounded-full transition-colors duration-200 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-400 ${className}`}
       aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
       title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
@@ -139,3 +136,20 @@ export const ThemeToggle = ({ className }) => {
     </button>
   );
 };
+
+// PropTypes
+ThemeProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
+ThemeToggle.propTypes = {
+  className: PropTypes.string
+};
+
+// Export components
+export {
+  ThemeProvider,
+  ThemeToggle
+};
+
+export default ThemeProvider;
