@@ -11,14 +11,16 @@ export const useResumeService = () => {
     parse: false,
     improve: false,
     export: false,
-    analyze: false
+    analyze: false,
+    analytics: false
   });
   
   const [errors, setErrors] = useState({
     parse: null,
     improve: null,
     export: null,
-    analyze: null
+    analyze: null,
+    analytics: null
   });
 
   /**
@@ -122,6 +124,24 @@ export const useResumeService = () => {
     }
   }, []);
 
+  /**
+   * Get AI-powered improvement analytics and recommendations
+   */
+  const getImprovementAnalytics = useCallback(async (resumeData, improvements, savedBullets) => {
+    setLoading(prev => ({ ...prev, analytics: true }));
+    setErrors(prev => ({ ...prev, analytics: null }));
+    
+    try {
+      return await ResumeAPI.getImprovementAnalytics(resumeData, improvements, savedBullets);
+    } catch (error) {
+      console.error("Error in getImprovementAnalytics:", error);
+      setErrors(prev => ({ ...prev, analytics: error.message }));
+      return null;
+    } finally {
+      setLoading(prev => ({ ...prev, analytics: false }));
+    }
+  }, []);
+
   return {
     loading,
     setLoading,
@@ -130,7 +150,8 @@ export const useResumeService = () => {
     parseResume,
     getAISuggestions,
     analyzeResume,
-    exportResume
+    exportResume,
+    getImprovementAnalytics
   };
 };
 

@@ -570,6 +570,132 @@ export const ResumeAPI = {
       throw new Error('Failed to generate resume analysis. Please try again later.');
     }
   },
+  
+  /**
+   * Get AI-powered improvement recommendations based on the improvements made so far
+   * 
+   * @param {Object} resumeData - Structured resume data with bullet points
+   * @param {Object} improvements - Object containing improved bullet points
+   * @param {Object} savedBullets - Object tracking which bullets have been saved
+   * @returns {Promise<{
+   *   generalImprovements: string[],
+   *   missingConcepts: Array<{
+   *     category: string,
+   *     skills: Array<{
+   *       name: string,
+   *       recommendation: string
+   *     }>
+   *   }>,
+   *   aiInsights: string[]
+   * }>}
+   * 
+   * Expected API Endpoint: POST /api/v1/resume/improvement-analytics
+   * Content-Type: application/json
+   */
+  async getImprovementAnalytics(resumeData, improvements, savedBullets) {
+    try {
+      if (API_CONFIG.useMockData) {
+        console.log("Using mock data for improvement analytics");
+        await delay(2000); // Simulate AI processing time
+        
+        // Return mock analytics data
+        return {
+          success: true,
+          generalImprovements: [
+            "Add more quantifiable achievements with specific metrics (numbers, percentages, dollar amounts)",
+            "Ensure all bullet points start with powerful action verbs that showcase your initiative",
+            "Highlight technical skills that are most relevant to your target roles",
+            "Connect your achievements to business outcomes and demonstrate your impact",
+            "Remove unnecessary words and phrases for clarity and conciseness",
+            "Tailor your bullet points to mirror the language used in job descriptions",
+            "Add more industry-specific keywords for better ATS optimization"
+          ],
+          missingConcepts: [
+            {
+              category: "Leadership & Management",
+              skills: [
+                {
+                  name: "Mentorship & Team Development",
+                  recommendation: "Add examples of how you've mentored team members, provided training, or helped colleagues develop new skills."
+                },
+                {
+                  name: "Strategic Planning & Vision",
+                  recommendation: "Include instances where you've contributed to strategic initiatives, long-term planning, or helped shape the direction of projects."
+                },
+                {
+                  name: "Cross-functional Leadership",
+                  recommendation: "Highlight your ability to work across departments, align diverse teams, and lead initiatives that span multiple areas of the business."
+                }
+              ]
+            },
+            {
+              category: "Process Excellence & Innovation",
+              skills: [
+                {
+                  name: "Process Automation",
+                  recommendation: "Describe how you've automated manual processes, implemented tools, or created systems that improved efficiency."
+                },
+                {
+                  name: "Continuous Improvement",
+                  recommendation: "Show how you've identified opportunities for improvement, implemented changes, and measured results."
+                },
+                {
+                  name: "Innovation & Problem Solving",
+                  recommendation: "Highlight creative solutions you've developed to address complex challenges or improve existing systems."
+                }
+              ]
+            },
+            {
+              category: "Business Impact & Value Creation",
+              skills: [
+                {
+                  name: "Revenue Growth & Business Development",
+                  recommendation: "Include ways you've contributed to revenue growth, new business opportunities, or customer acquisition/retention."
+                },
+                {
+                  name: "Cost Reduction & Efficiency",
+                  recommendation: "Detail how your work has led to cost savings, better resource utilization, or improved ROI."
+                },
+                {
+                  name: "Stakeholder Management",
+                  recommendation: "Add examples of how you've effectively managed relationships with internal and external stakeholders."
+                }
+              ]
+            }
+          ],
+          aiInsights: [
+            "Your resume would benefit from more emphasis on leadership skills, even if you're not in a management position",
+            "Consider adding more examples that demonstrate your problem-solving approach rather than just listing responsibilities",
+            "Your strongest achievements focus on technical implementation - balance this with business impact statements",
+            "Many recruiters look for candidates who can bridge technical expertise with business understanding - highlight this skill",
+            "Most job descriptions now emphasize collaboration and teamwork - make sure your resume reflects these soft skills"
+          ]
+        };
+      }
+      
+      // Real API implementation:
+      console.log("Sending data to improvement analytics API...");
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/resume/improvement-analytics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resumeData, improvements, savedBullets }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.message || `API request failed with status ${response.status}`
+        );
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get improvement analytics:', error);
+      throw new Error('Failed to generate improvement recommendations. Please try again later.');
+    }
+  },
 
   /**
    * Get AI-powered improvements for a resume bullet point

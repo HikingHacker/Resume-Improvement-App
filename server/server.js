@@ -616,6 +616,170 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
   }
 });
 
+// Endpoint to get AI-powered improvement recommendations
+app.post('/api/v1/resume/improvement-analytics', async (req, res) => {
+  try {
+    const { resumeData, improvements, savedBullets } = req.body;
+    
+    if (!resumeData || !resumeData.bullet_points || !Array.isArray(resumeData.bullet_points)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid resume data with bullet points is required' 
+      });
+    }
+    
+    console.log('Resume improvement analytics endpoint called');
+    console.log('Resume data contains', resumeData.bullet_points.length, 'job positions');
+    console.log('Improvements object contains', Object.keys(improvements || {}).length, 'improved bullets');
+    console.log('SavedBullets object contains', Object.keys(savedBullets || {}).length, 'saved bullets');
+    
+    // Prepare the resume data in a format that Claude can analyze
+    let formattedResume = '';
+    let formattedImprovements = '';
+    
+    // Add job positions and their bullet points
+    resumeData.bullet_points.forEach((job, jobIndex) => {
+      formattedResume += `POSITION: ${job.position || 'Unknown Position'} at ${job.company || 'Unknown Company'}`;
+      if (job.time_period) {
+        formattedResume += ` (${job.time_period})`;
+      }
+      formattedResume += '\n\n';
+      
+      // Add bullet points
+      if (job.achievements && job.achievements.length > 0) {
+        job.achievements.forEach((bullet, bulletIndex) => {
+          const bulletId = `job${jobIndex}-bullet${bulletIndex}`;
+          const isSaved = savedBullets && savedBullets[bulletId];
+          const improvement = improvements && improvements[bulletId];
+          
+          formattedResume += `• ${bullet}\n`;
+          
+          // If this bullet has been improved and saved, add it to the improvements section
+          if (isSaved && improvement && improvement.improvedBulletPoint) {
+            formattedImprovements += `ORIGINAL: ${bullet}\n`;
+            formattedImprovements += `IMPROVED: ${improvement.improvedBulletPoint}\n\n`;
+          }
+        });
+        formattedResume += '\n';
+      }
+    });
+    
+    console.log('Formatted resume for analysis, length:', formattedResume.length);
+    console.log('Formatted improvements for analysis, length:', formattedImprovements.length);
+    
+    // Define system prompt for resume improvement analytics
+    const ANALYTICS_SYSTEM_PROMPT = `
+      You are an expert resume improvement analyst who provides detailed insights on resume enhancements.
+      The user has already improved several bullet points on their resume using AI assistance.
+      Your task is to analyze both their original resume and the improvements they've made, then provide actionable recommendations.
+      
+      Analyze the improvements in these areas:
+      1. What types of improvements were made (stronger verbs, quantifiable results, technical details, etc.)
+      2. What high-value skills/concepts are still missing from the resume
+      3. Patterns in the improvements that could be applied to other parts of the resume
+      4. Strategic recommendations for further enhancing the resume
+      
+      Your response MUST be in valid JSON format with these exact keys:
+      {
+        "generalImprovements": [
+          "actionable recommendation 1", 
+          "actionable recommendation 2",
+          ...
+        ],
+        "missingConcepts": [
+          {
+            "category": "Leadership & Management",
+            "skills": [
+              {
+                "name": "Mentorship & Team Development",
+                "recommendation": "Add examples of how you've mentored team members, provided training, or helped colleagues develop new skills."
+              },
+              ...
+            ]
+          },
+          {
+            "category": "Process Excellence & Innovation",
+            "skills": [...] 
+          },
+          {
+            "category": "Business Impact & Value Creation", 
+            "skills": [...]
+          },
+          {
+            "category": "Technical & Domain Expertise",
+            "skills": [...]
+          }
+        ],
+        "aiInsights": [
+          "strategic insight 1",
+          "strategic insight 2",
+          ...
+        ]
+      }
+      
+      Each missing concept category should include 2-4 skills.
+      Only return the JSON object, nothing else. Ensure the JSON is valid and properly formatted.
+    `;
+    
+    // User prompt for Claude
+    const analyticsPrompt = `
+      Please analyze the following resume and the improvements that have been made to some bullet points:
+      
+      ORIGINAL RESUME:
+      ${formattedResume}
+      
+      IMPROVED BULLET POINTS:
+      ${formattedImprovements}
+      
+      Based on the improvements made so far, provide recommendations for additional improvements 
+      and identify missing high-value skills or concepts that would make this resume even stronger.
+    `;
+    
+    // Call Claude API
+    console.log('Calling Claude API for resume improvement analytics...');
+    const response = await callClaudeAPI({
+      prompt: analyticsPrompt,
+      systemPrompt: ANALYTICS_SYSTEM_PROMPT,
+      temperature: 0.5,
+      maxTokens: 1500, // More tokens for comprehensive analysis
+    });
+    
+    console.log('Claude response received (first 200 chars):', response.substring(0, 200));
+    
+    // Parse the JSON response
+    try {
+      // Extract JSON from the response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+      
+      const analyticsResult = JSON.parse(jsonMatch[0]);
+      console.log('Successfully parsed JSON response');
+      
+      // Add success flag to the response
+      analyticsResult.success = true;
+      
+      // Return the analysis
+      res.json(analyticsResult);
+    } catch (jsonError) {
+      console.error('Error parsing JSON response:', jsonError);
+      console.error('Raw response:', response);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to parse the improvement analytics result',
+        error: jsonError.message
+      });
+    }
+  } catch (error) {
+    console.error('Error in resume improvement analytics endpoint:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to analyze the resume improvements' 
+    });
+  }
+});
+
 // Endpoint to export resume (mock implementation)
 app.post('/api/v1/resume/export', (req, res) => {
   const { bulletPoints, format = 'pdf', template = 'modern' } = req.body;

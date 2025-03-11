@@ -162,7 +162,7 @@ const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStep
 };
 
 const ResumeImprovement = () => {
-  const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume } = useResumeService();
+  const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume, getImprovementAnalytics } = useResumeService();
   const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 3.5: improvement analytics, 4: final review
   const [resumeData, setResumeData] = useState({ bullet_points: [] });
   const [flatBulletPoints, setFlatBulletPoints] = useState([]);
@@ -176,12 +176,38 @@ const ResumeImprovement = () => {
   const [savedBullets, setSavedBullets] = useState({});
   const [originalBullets, setOriginalBullets] = useState({}); // Store original bullets separately
   const [resumeEdited, setResumeEdited] = useState(false);
+  // State for AI analytics recommendations
+  const [aiRecommendations, setAiRecommendations] = useState(null);
   
   // State for editing job details in overview
   const [editingJobIndex, setEditingJobIndex] = useState(null);
   const [editingJob, setEditingJob] = useState(null);
   const [editingBulletInfo, setEditingBulletInfo] = useState({ jobIndex: null, bulletIndex: null });
   const [editedBullet, setEditedBullet] = useState("");
+
+  // Function to fetch AI-powered analytics and recommendations
+  const getAnalytics = async () => {
+    try {
+      setLoading(prev => ({ ...prev, analytics: true }));
+      
+      const analyticsData = await getImprovementAnalytics(
+        resumeData, 
+        improvements,
+        savedBullets
+      );
+      
+      if (analyticsData && analyticsData.success) {
+        setAiRecommendations(analyticsData);
+        console.log("AI analytics data received:", analyticsData);
+      } else {
+        console.error("Failed to get AI analytics data");
+      }
+    } catch (error) {
+      console.error("Error fetching AI analytics:", error);
+    } finally {
+      setLoading(prev => ({ ...prev, analytics: false }));
+    }
+  };
 
   const resetState = () => {
     setStep(0);
@@ -199,6 +225,7 @@ const ResumeImprovement = () => {
     setResumeAnalysis(null);
     setSavedBullets({});
     setOriginalBullets({});
+    setAiRecommendations(null);
   };
 
   const handleFileUpload = async (event) => {
@@ -1450,16 +1477,7 @@ const ResumeImprovement = () => {
     // Sort improvement themes by count
     improvementThemes.sort((a, b) => b.count - a.count);
     
-    // Get top further improvement recommendations
-    const furtherImprovements = [
-      "Add more quantifiable achievements (numbers, percentages, dollar amounts)",
-      "Ensure all bullet points start with strong action verbs",
-      "Highlight technical skills relevant to your target roles",
-      "Connect achievements to business outcomes and impact",
-      "Remove unnecessary words and phrases for clarity",
-      "Tailor bullet points to specific job requirements",
-      "Add more industry-specific keywords for ATS optimization"
-    ];
+  // Remove the duplicate definition
     
     return (
       <Card className="w-full shadow-md transition-colors duration-200">
@@ -1593,14 +1611,123 @@ const ResumeImprovement = () => {
             </h3>
             
             <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-100 dark:border-primary-800">
-              <ul className="space-y-2">
-                {furtherImprovements.map((improvement, index) => (
-                  <li key={index} className="flex items-start">
-                    <span className="text-primary-600 dark:text-primary-400 mr-2 mt-0.5">•</span>
-                    <span className="text-gray-800 dark:text-gray-200">{improvement}</span>
-                  </li>
-                ))}
-              </ul>
+              {/* Loading state */}
+              {loading.analytics ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-full mb-4">
+                    <svg className="animate-spin h-10 w-10 text-purple-600 dark:text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    Generating AI Recommendations...
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                    Claude AI is analyzing your resume improvements and generating personalized recommendations.
+                  </p>
+                </div>
+              ) : aiRecommendations ? (
+                <>
+                  <div className="flex items-center mb-4">
+                    <div className="flex items-center bg-purple-100 dark:bg-purple-900/30 p-2 rounded-md">
+                      <svg viewBox="0 0 32 32" className="w-5 h-5 mr-2 text-purple-600 dark:text-purple-400" fill="currentColor">
+                        <path d="M20.65 2.5a9.46 9.46 0 00-4.07 1.15c-1.272.679-1.803 1.3-4.11 4.1.89-.77 1.564-1.184 2.61-1.68a4.764 4.764 0 013.32-.37c2.54.67 4.17 3.13 3.81 5.7-.41 2.81-3.06 4.8-5.82 4.42-.08 0-.69-.17-.8-.21 1.45.64 2.96.909 4.5.8 2.175-.174 4.199-1.111 5.7-2.64-.43 3.57-2.77 6.29-6.4 7.53-3.95 1.33-8.42.29-11.26-2.72-2.35-2.5-3.41-5.94-2.75-9.35 1.43 2.21 2.68 3.19 5.22 4.12-.13-1.27.48-2.52 1.55-3.17 1.29-.72 2.13-.31 3.12.49.54-1.09.33-1.36.19-1.93-.2-.76-.24-.9-.47-1.33-.29-.53-.53-.85-1.09-1.38A10.5 10.5 0 119.55 2.5c3.72 0 6.85 1.55 9.31 4.43-1.08-1.73-2.05-2.78-3.82-3.73a6.398 6.398 0 00-4.39-.7z" />
+                      </svg>
+                      <span className="font-semibold text-purple-800 dark:text-purple-300">AI-Powered Recommendations</span>
+                    </div>
+                  </div>
+                
+                  <h4 className="font-medium mb-3 text-gray-800 dark:text-gray-200">General Improvement Strategies:</h4>
+                  <ul className="space-y-2 mb-6">
+                    {aiRecommendations.generalImprovements.map((improvement, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-primary-600 dark:text-primary-400 mr-2 mt-0.5">•</span>
+                        <span className="text-gray-800 dark:text-gray-200">{improvement}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  
+                  <h4 className="font-medium mb-4 text-gray-800 dark:text-gray-200 border-t border-primary-200 dark:border-primary-700 pt-4">
+                    Missing High-Value Skills & Concepts:
+                  </h4>
+                  
+                  <div className="space-y-6">
+                    {aiRecommendations.missingConcepts.map((category, categoryIndex) => (
+                      <div key={categoryIndex} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                        <h5 className="font-medium mb-2 text-gray-900 dark:text-white flex items-center">
+                          {category.category}
+                          <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
+                            {category.skills.length} skills
+                          </span>
+                        </h5>
+                        <div className="space-y-3">
+                          {category.skills.map((skill, skillIndex) => (
+                            <div key={skillIndex} className="flex items-start">
+                              <div className="bg-yellow-100 dark:bg-yellow-900/50 p-1 rounded-full mr-2 mt-0.5 flex-shrink-0">
+                                <AlertTriangle className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{skill.name}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  {skill.recommendation}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <h4 className="font-medium mb-3 text-gray-800 dark:text-gray-200 border-t border-primary-200 dark:border-primary-700 pt-4 mt-6">
+                    AI Analysis Insights:
+                  </h4>
+                  
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-800">
+                    <ul className="space-y-3">
+                      {aiRecommendations.aiInsights.map((insight, index) => (
+                        <li key={index} className="flex items-start">
+                          <div className="bg-purple-100 dark:bg-purple-800 p-1 rounded-full mr-2 mt-0.5 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          </div>
+                          <span className="text-gray-800 dark:text-gray-200">{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-6 border-t border-primary-200 dark:border-primary-700 pt-4">
+                    These AI-powered recommendations are based on analyzing your resume content and comparing it to current job market trends and hiring practices. Adding these missing skills and concepts can significantly improve your resume's effectiveness.
+                  </p>
+                </>
+              ) : (
+                // Error state or empty state
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4">
+                    <AlertTriangle className="w-10 h-10 text-yellow-500 dark:text-yellow-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    Unable to Generate Recommendations
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 max-w-md mb-6">
+                    We couldn't generate AI recommendations at this time. This could be due to a connection issue or insufficient data.
+                  </p>
+                  <Button 
+                    onClick={getAnalytics} 
+                    variant="primary"
+                    loading={loading.analytics}
+                  >
+                    <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 4V20H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M4 16L8 12L12 16L20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Try Again
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           
@@ -1981,7 +2108,12 @@ const ResumeImprovement = () => {
         setResumeEdited(false);
       }
     }
-  }, [step, resumeAnalysis, resumeEdited, resumeData]);
+    
+    // Fetch analytics data when entering the improvement analytics screen
+    if (step === 3.5 && !aiRecommendations) {
+      getAnalytics();
+    }
+  }, [step, resumeAnalysis, resumeEdited, resumeData, aiRecommendations]);
   
 
   // New function to render the resume analysis screen
