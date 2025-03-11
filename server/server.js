@@ -535,9 +535,9 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
       3. Areas for Improvement - Provide 3-5 specific, actionable recommendations
       4. Missing Skills - Identify 3-5 skills that would enhance the candidate's profile
       5. Recommended Roles - Suggest 3-5 job roles that match their experience and skills
-      6. Top Industries - List 3-4 industries where their skills are in demand, with match rating (High/Medium/Low) and key skills for each
+      6. Top Industries - List 3-6 industries where their skills are in demand, with match rating (High/Medium/Low) and key skills for each
       7. Companies to Apply To - Suggest both major companies (10) and promising growth companies (10) that would be good fits
-      8. ATS Keyword Optimization - Identify keywords that are likely used in ATS systems for the candidate's target roles. Include 5-8 keywords already present in the resume, and 8-10 important keywords that should be added
+      8. ATS Keyword Optimization - Identify keywords that are likely used in ATS systems for the candidate's target roles. Include 5-12 keywords already present in the resume, and 8-15 important keywords that should be added
       
       Your response MUST be in valid JSON format with these exact keys:
       {

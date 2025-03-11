@@ -2195,17 +2195,25 @@ const ResumeImprovement = () => {
         <Card className="w-full shadow-md transition-colors duration-200">
           <CardHeader>
             <CardTitle className="text-xl">Resume Analysis</CardTitle>
+            <CardDescription>
+              Generating personalized insights about your career strengths and opportunities
+            </CardDescription>
           </CardHeader>
           
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8">
             <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-4 rounded-lg">
-              <p className="text-sm text-primary-800 dark:text-primary-300">
-                Our AI is analyzing your resume to provide personalized insights. This may take a moment...
-              </p>
+              <div className="flex items-center">
+                <div className="bg-primary-100 dark:bg-primary-800 p-2 rounded-full mr-3">
+                  <Sparkles className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <p className="text-sm text-primary-800 dark:text-primary-300 font-medium">
+                  Our AI is analyzing your resume to provide personalized insights
+                </p>
+              </div>
             </div>
             
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="bg-primary-100 dark:bg-primary-900/50 p-4 rounded-full mb-4">
+              <div className="bg-primary-100 dark:bg-primary-900/50 p-4 rounded-full mb-4 animate-pulse">
                 <svg className="animate-spin h-10 w-10 text-primary-600 dark:text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -2213,6 +2221,163 @@ const ResumeImprovement = () => {
               </div>
               <p className="text-gray-700 dark:text-gray-300 text-center mb-2 font-medium">Analyzing your resume...</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center">This can take 15-20 seconds</p>
+            </div>
+            
+            {/* Skeleton loader placeholders for all analysis sections */}
+            <div className="space-y-8">
+              {/* Strengths Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-green-700 dark:text-green-400 flex items-center">
+                  <div className="bg-green-100 dark:bg-green-900/50 p-1.5 rounded-full mr-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Resume Strengths</span>
+                </h3>
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 animate-pulse">
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="flex items-start">
+                        <span className="text-green-600 dark:text-green-400 mr-2 font-bold opacity-50">•</span>
+                        <div className="h-4 bg-green-200 dark:bg-green-700 rounded w-full opacity-50"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Weaknesses Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-yellow-700 dark:text-yellow-500 flex items-center">
+                  <div className="bg-yellow-100 dark:bg-yellow-900/50 p-1.5 rounded-full mr-2">
+                    <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Areas for Improvement</span>
+                </h3>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 animate-pulse">
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-start">
+                        <span className="text-yellow-600 dark:text-yellow-400 mr-2 font-bold opacity-50">•</span>
+                        <div className="h-4 bg-yellow-200 dark:bg-yellow-700 rounded w-full opacity-50"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Recommendations Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary-700 dark:text-primary-400 flex items-center">
+                  <div className="bg-primary-100 dark:bg-primary-900/50 p-1.5 rounded-full mr-2">
+                    <Info className="w-5 h-5 text-primary-600 dark:text-primary-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Recommended Improvements</span>
+                </h3>
+                <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800 animate-pulse">
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="flex items-start">
+                        <span className="text-primary-600 dark:text-primary-400 mr-2 font-bold opacity-50">•</span>
+                        <div className="h-4 bg-primary-200 dark:bg-primary-700 rounded w-full opacity-50"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Missing Skills Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-purple-700 dark:text-purple-400 flex items-center">
+                  <div className="bg-purple-100 dark:bg-purple-900/50 p-1.5 rounded-full mr-2">
+                    <PenTool className="w-5 h-5 text-purple-600 dark:text-purple-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Skills to Consider Adding</span>
+                </h3>
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800 animate-pulse">
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <div key={i} className="h-8 bg-purple-200 dark:bg-purple-700 rounded-full w-24 opacity-50"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* ATS Keywords Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-cyan-700 dark:text-cyan-400 flex items-center">
+                  <div className="bg-cyan-100 dark:bg-cyan-900/50 p-1.5 rounded-full mr-2">
+                    <ClipboardList className="w-5 h-5 text-cyan-600 dark:text-cyan-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">ATS Keyword Optimization</span>
+                </h3>
+                <div className="bg-cyan-50 dark:bg-cyan-900/20 p-4 rounded-lg border border-cyan-200 dark:border-cyan-800 animate-pulse">
+                  <div className="h-4 bg-cyan-200 dark:bg-cyan-700 rounded w-3/4 opacity-50 mb-4"></div>
+                  
+                  <h4 className="font-medium text-cyan-800 dark:text-cyan-400 mb-2 flex items-center opacity-50">
+                    <CheckCircle className="h-4 w-4 mr-1 opacity-50" />
+                    Keywords Present in Your Resume
+                  </h4>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="h-7 bg-green-200 dark:bg-green-700 rounded-full w-20 opacity-50"></div>
+                    ))}
+                  </div>
+                  
+                  <h4 className="font-medium text-cyan-800 dark:text-cyan-400 mb-2 flex items-center opacity-50">
+                    <PenTool className="h-4 w-4 mr-1 opacity-50" />
+                    Keywords to Add to Your Resume
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="h-7 bg-red-200 dark:bg-red-700 rounded-full w-24 opacity-50"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Top Industries Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-emerald-700 dark:text-emerald-400 flex items-center">
+                  <div className="bg-emerald-100 dark:bg-emerald-900/50 p-1.5 rounded-full mr-2">
+                    <Building className="w-5 h-5 text-emerald-600 dark:text-emerald-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Top Industries for Your Skills</span>
+                </h3>
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800 animate-pulse">
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="border-b border-emerald-100 dark:border-emerald-800/50 pb-3 last:border-0 last:pb-0">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="h-5 bg-emerald-200 dark:bg-emerald-700 rounded w-40 opacity-50"></div>
+                          <div className="h-5 bg-green-200 dark:bg-green-700 rounded-full w-20 opacity-50"></div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {[1, 2, 3, 4].map((j) => (
+                            <div key={j} className="h-6 bg-white dark:bg-gray-700 rounded border border-emerald-200 dark:border-emerald-800 w-16 opacity-50"></div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Recommended Roles Section Skeleton */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-indigo-700 dark:text-indigo-400 flex items-center">
+                  <div className="bg-indigo-100 dark:bg-indigo-900/50 p-1.5 rounded-full mr-2">
+                    <Briefcase className="w-5 h-5 text-indigo-600 dark:text-indigo-400 opacity-50" />
+                  </div>
+                  <span className="opacity-50">Recommended Roles</span>
+                </h3>
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800 animate-pulse">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <div key={i} className="h-10 bg-white dark:bg-gray-700 rounded-lg border border-indigo-200 dark:border-indigo-800 opacity-50"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -2225,6 +2390,9 @@ const ResumeImprovement = () => {
         <Card className="w-full shadow-md transition-colors duration-200">
           <CardHeader>
             <CardTitle className="text-xl">Resume Analysis</CardTitle>
+            <CardDescription>
+              We encountered an issue analyzing your resume
+            </CardDescription>
           </CardHeader>
           
           <CardContent className="space-y-6">
@@ -2237,45 +2405,70 @@ const ResumeImprovement = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-red-800 dark:text-red-300 mb-1">Error analyzing your resume</h3>
-                  <p className="text-sm text-red-700 dark:text-red-400">{errors.analyze || "There was an issue generating your resume analysis. Please try again."}</p>
+                  <p className="text-sm text-red-700 dark:text-red-400">{errors.analyze || "There was an issue generating your resume analysis. This could be due to the format of your resume or a temporary system error."}</p>
                 </div>
               </div>
             </div>
             
-            <Button 
-              onClick={getResumeAnalysis} 
-              variant="primary"
-              className="w-full"
-            >
-              Try Again
-            </Button>
+            <div className="flex flex-col items-center justify-center py-6">
+              <p className="text-gray-600 dark:text-gray-400 text-center mb-4">
+                You can try again or continue to the bullet improvement section manually.
+              </p>
+              <Button 
+                onClick={getResumeAnalysis} 
+                variant="primary"
+                className="w-full md:w-auto"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Try Analysis Again
+              </Button>
+            </div>
           </CardContent>
         </Card>
       );
     }
 
-    // No data yet, continue with loading
+    // No data yet, ready to generate state
     if (!resumeAnalysis) {
       return (
         <Card className="w-full shadow-md transition-colors duration-200">
           <CardHeader>
             <CardTitle className="text-xl">Resume Analysis</CardTitle>
+            <CardDescription>
+              Get AI-powered insights about your resume's strengths and opportunities
+            </CardDescription>
           </CardHeader>
           
           <CardContent className="space-y-6">
             <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-4 rounded-lg">
-              <p className="text-sm text-primary-800 dark:text-primary-300">
-                Preparing your resume analysis...
-              </p>
+              <div className="flex items-start">
+                <div className="bg-primary-100 dark:bg-primary-800 p-2 rounded-full mr-3 flex-shrink-0 mt-1">
+                  <Info className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-primary-800 dark:text-primary-300 mb-1">Ready to analyze your resume</h3>
+                  <p className="text-sm text-primary-700 dark:text-primary-400">
+                    Our AI will analyze your resume to identify strengths, areas for improvement, and provide personalized recommendations.
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <Button 
-              onClick={getResumeAnalysis} 
-              variant="primary"
-              className="w-full"
-            >
-              Generate Analysis
-            </Button>
+            <div className="flex flex-col items-center justify-center py-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <Sparkles className="w-10 h-10 text-primary-500 dark:text-primary-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Personalized Resume Analysis</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-center mb-4 max-w-md">
+                Get insights about your strengths, improvement areas, missing skills, and industry fit.
+              </p>
+              <Button 
+                onClick={getResumeAnalysis} 
+                variant="primary"
+                size="lg"
+              >
+                <Sparkles className="w-5 h-5 mr-2" />
+                Generate Analysis
+              </Button>
+            </div>
           </CardContent>
         </Card>
       );
