@@ -1,6 +1,6 @@
 import React from 'react';
 import { Upload } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui';
 
 /**
  * Resume upload component

@@ -1,8 +1,13 @@
 import React from 'react';
 import { Building, Briefcase, Calendar, AlertTriangle, FileText, Building as CompanyIcon } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
-import Button from '../ui/Button';
-import Input from '../ui/Input';
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardContent,
+  Button,
+  Input
+} from '../ui';
 import { useResumeContext } from '../../contexts/ResumeContext';
 
 /**

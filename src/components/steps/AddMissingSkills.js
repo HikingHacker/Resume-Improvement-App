@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle, AlertTriangle, PenTool, Briefcase, Sparkles, Zap } from 'lucide-react';
-import Button from '../ui/Button';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from '../ui/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/Table';
-import Textarea from '../ui/Textarea';
+import { 
+  Button, 
+  Card, 
+  CardHeader, 
+  CardContent, 
+  CardTitle, 
+  CardDescription, 
+  CardFooter,
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell,
+  Textarea 
+} from '../ui';
 
 const AddMissingSkills = ({ 
   resumeData, 
@@ -306,22 +318,98 @@ const AddMissingSkills = ({
   
   // Render the review tab
   const renderBulletReview = () => {
+    // Get the current skill ID
+    const skillId = selectedSkill && targetJobForSkill ? 
+      getSkillId(selectedSkill, targetJobForSkill) : null;
+    
+    // Get bullet options if available
+    const bulletOptions = skillId && newSkillBullets[skillId]?.multipleBullets || [];
+    const selectedVariation = skillId && newSkillBullets[skillId]?.selectedVariation || 0;
+    
+    // Handle selection of a different bullet variation
+    const handleVariationSelect = (index) => {
+      if (!skillId) return;
+      
+      // Update the selected variation and current bullet text
+      setBulletText(bulletOptions[index]);
+      
+      // Update the newSkillBullets state
+      setNewSkillBullets(prev => ({
+        ...prev,
+        [skillId]: {
+          ...prev[skillId],
+          selectedVariation: index,
+          bullet: bulletOptions[index]
+        }
+      }));
+    };
+    
     return (
       <div className="space-y-6">
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <h3 className="font-semibold mb-2 text-green-800 dark:text-green-300 flex items-center">
             <CheckCircle className="w-5 h-5 mr-2" />
-            Review Generated Bullet Point
+            Review Generated Bullet Points
           </h3>
           <p className="text-sm text-green-700 dark:text-green-400">
-            Here's an AI-generated bullet point that demonstrates the <strong>{selectedSkill?.name}</strong> skill. 
-            You can edit it before adding it to your resume.
+            Here are AI-generated bullet point options that demonstrate the <strong>{selectedSkill?.name}</strong> skill. 
+            Choose one or edit it before adding to your resume.
           </p>
         </div>
         
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-5 space-y-4">
+          {/* Display multiple bullet options if available */}
+          {bulletOptions.length > 1 && (
+            <div className="mb-4">
+              <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-3">Choose a bullet point option:</h4>
+              <div className="space-y-3">
+                {bulletOptions.map((option, index) => (
+                  <div 
+                    key={index}
+                    className={`
+                      p-3 rounded-lg border cursor-pointer transition-colors
+                      ${selectedVariation === index
+                        ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/30 dark:border-primary-600 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }
+                    `}
+                    onClick={() => handleVariationSelect(index)}
+                  >
+                    <div className="flex items-start">
+                      <div className={`
+                        flex-shrink-0 w-6 h-6 rounded-full mr-2 flex items-center justify-center mt-0.5
+                        ${selectedVariation === index
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700'
+                        }
+                      `}>
+                        {selectedVariation === index ? (
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        ) : (
+                          <span className="text-xs font-medium">{index + 1}</span>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm ${selectedVariation === index ? 'text-gray-900 dark:text-gray-100 font-medium' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {option}
+                        </p>
+                        {selectedVariation === index && (
+                          <span className="text-xs text-primary-600 dark:text-primary-400 mt-1 block">
+                            Selected option
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <div>
-            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-3">Generated Bullet Point:</h4>
+            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-3">
+              {bulletOptions.length > 1 ? 'Edit Selected Bullet Point:' : 'Generated Bullet Point:'}
+            </h4>
             <Textarea
               value={bulletText}
               onChange={(e) => setBulletText(e.target.value)}

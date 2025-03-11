@@ -1,7 +1,13 @@
 import React from 'react';
 import { FileText, PenTool, Briefcase } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
-import Button from '../ui/Button';
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription, 
+  CardContent,
+  Button
+} from '../ui';
 
 /**
  * Feature selection step component

@@ -1,166 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, Sun, Moon, CheckCircle, X, Info, Sparkles, ClipboardList, LineChart, Zap, Layers } from 'lucide-react';
-import Button from './ui/Button';
-import Input from './ui/Input';
-import Textarea from './ui/Textarea';
-import { Card, CardHeader, CardContent, CardTitle, CardDescription, CardFooter } from './ui/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/Table';
-import { Skeleton, SkeletonText } from './ui/Skeleton';
-import { useTheme } from './ui/ThemeProvider';
+import { 
+  Button, 
+  Input, 
+  Textarea, 
+  Card, 
+  CardHeader, 
+  CardContent, 
+  CardTitle, 
+  CardDescription, 
+  CardFooter,
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell,
+  Skeleton, 
+  SkeletonText,
+  ConfirmationModal,
+  StepNavigation,
+  useTheme
+} from './ui';
 import useResumeService from '../services/hooks/useResumeService';
 import AddMissingSkills from './steps/AddMissingSkills';
 
-const ConfirmationModal = ({ isOpen, onConfirm, onCancel }) => {
-  // Handle keyboard events for accessibility
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onCancel();
-      }
-    };
-    
-    window.addEventListener('keydown', handleEsc);
-    
-    // Lock body scroll when modal is open
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    }
-    
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'visible';
-    };
-  }, [isOpen, onCancel]);
-  
-  if (!isOpen) return null;
+// Using our modularized ConfirmationModal component from UI library
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-      onClick={onCancel} // Allow clicking outside to close
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      <div 
-        className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full animate-slide-in"
-        onClick={(e) => e.stopPropagation()} // Prevent clicks inside from closing
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <div className="bg-yellow-100 dark:bg-yellow-900 p-2 rounded-full mr-3">
-              <AlertTriangle className="text-yellow-500 dark:text-yellow-400 w-5 h-5" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white" id="modal-title">
-              Confirm Restart
-            </h3>
-          </div>
-          <button 
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
-            aria-label="Close dialog"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="mb-6">
-          <p className="text-gray-700 dark:text-gray-300">
-            Are you sure you want to go back? This will restart the process and all changes will be lost.
-          </p>
-        </div>
-        
-        <div className="flex justify-end space-x-3">
-          <Button 
-            onClick={onCancel} 
-            variant="ghost"
-            aria-label="Cancel and close dialog"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={onConfirm} 
-            variant="danger"
-            aria-label="Confirm restart"
-          >
-            Confirm
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Navigation steps component
-const StepNavigation = ({ currentStep, steps, onStepClick, disabled = [], isStepCompleted }) => {
-  return (
-    <div className="w-full mb-8 flex justify-center">
-      <div className="flex items-center max-w-4xl w-full">
-        {steps.map((step, index) => {
-          const isActive = currentStep === step.value;
-          const isDisabled = disabled.includes(step.value);
-          const isCompleted = isStepCompleted(step.value);
-          const isLast = index === steps.length - 1;
-          
-          return (
-            <React.Fragment key={index}>
-              {/* Step item */}
-              <div className="flex flex-col items-center justify-center relative z-10">
-                {/* Step circle */}
-                <button 
-                  onClick={() => !isDisabled && onStepClick(step.value)}
-                  disabled={isDisabled}
-                  className={`
-                    w-10 h-10 rounded-full flex items-center justify-center
-                    transition-all duration-200 relative
-                    ${isActive 
-                      ? 'bg-primary-600 dark:bg-primary-500 text-white shadow-md' 
-                      : isCompleted
-                        ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 border-2 border-primary-600 dark:border-primary-500'
-                        : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600'
-                    }
-                    ${isDisabled ? 'cursor-not-allowed opacity-60' : 'hover:shadow-lg'}
-                  `}
-                  aria-current={isActive ? 'step' : undefined}
-                >
-                  {isCompleted ? (
-                    <CheckCircle className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                  ) : (
-                    <span className="text-sm font-semibold">{step.icon || index + 1}</span>
-                  )}
-                </button>
-                
-                {/* Step label */}
-                <span className={`
-                  mt-2 text-xs font-medium text-center w-20 transition-colors duration-200
-                  ${isActive 
-                    ? 'text-primary-700 dark:text-primary-300' 
-                    : isCompleted
-                      ? 'text-primary-600 dark:text-primary-400'
-                      : 'text-gray-600 dark:text-gray-400'
-                  }
-                `}>
-                  {step.label}
-                </span>
-              </div>
-              
-              {/* Connecting line */}
-              {!isLast && (
-                <div 
-                  className={`flex-1 h-0.5 mx-1 ${
-                    isCompleted && isStepCompleted(steps[index + 1].value) 
-                      ? 'bg-primary-600 dark:bg-primary-500' 
-                      : 'bg-gray-300 dark:bg-gray-600'
-                  }`}
-                ></div>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+// Using our modularized StepNavigation component from UI library
 
 const ResumeImprovement = () => {
   const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume, getImprovementAnalytics } = useResumeService();
@@ -217,7 +84,7 @@ const ResumeImprovement = () => {
     }
   };
   
-  // Function to generate a new bullet point for a missing skill using Claude AI
+  // Function to generate multiple bullet point options for a missing skill using Claude AI
   const generateSkillBullet = async (skillName, skillRecommendation, jobDetails) => {
     try {
       setGeneratingSkillBullet(true);
@@ -230,39 +97,69 @@ const ResumeImprovement = () => {
         return newSkillBullets[skillId];
       }
       
-      // Create a prompt for Claude to generate a bullet point
+      // Create a prompt for Claude to generate multiple bullet point options
       const context = `
-        Generate a strong resume bullet point that demonstrates the skill "${skillName}" for a person in the following role:
+        Generate 3 different strong resume bullet point options that demonstrate the skill "${skillName}" for a person in the following role:
         Position: ${jobDetails.position}
         Company: ${jobDetails.company}
         Time Period: ${jobDetails.time_period || 'Current'}
         
-        The bullet point should:
+        Each bullet point should:
         1. Start with a strong action verb
         2. Include specific metrics or quantifiable achievements (you can make up reasonable numbers)
         3. Show impact and results
         4. Be concise (1-2 lines)
         5. Incorporate relevant technical terms if applicable
         
+        Provide 3 different approaches or emphasis for the same skill.
+        
         Skill recommendation context: ${skillRecommendation}
+        
+        Format your response as multiple bullet options separated by ### between each option.
       `;
       
       // Use the bullet improvement service but with our custom context
       const result = await getAISuggestions(`Add a bullet point for ${skillName}`, context);
       
       if (result && result.improvedBulletPoint) {
-        // Store the generated bullet for this skill+job
-        const bulletPoint = result.improvedBulletPoint.replace(/^•\s*/, ''); // Remove bullet marker if present
+        // Parse multiple options from the result
+        let bulletOptions = [];
+        
+        if (result.multipleSuggestions && result.multipleSuggestions.length > 0) {
+          // If API already returned multiple suggestions, use those
+          bulletOptions = result.multipleSuggestions;
+        } else {
+          // Otherwise try to split the single response into multiple options
+          bulletOptions = result.improvedBulletPoint
+            .split('###')
+            .map(option => option.trim().replace(/^•\s*/, ''))
+            .filter(option => option.length > 0);
+          
+          // If we couldn't parse multiple options, use the single one
+          if (bulletOptions.length === 0) {
+            bulletOptions = [result.improvedBulletPoint.replace(/^•\s*/, '')];
+          }
+        }
+        
+        // Ensure we have at least one option
+        if (bulletOptions.length === 0) {
+          bulletOptions = [result.improvedBulletPoint.replace(/^•\s*/, '')];
+        }
+        
+        // Store the generated bullet options for this skill+job
         setNewSkillBullets(prev => ({
           ...prev,
           [skillId]: {
-            bullet: bulletPoint,
+            bullet: bulletOptions[0], // Default to first option
+            multipleBullets: bulletOptions,
+            selectedVariation: 0,
             skill: skillName,
             jobIndex: resumeData.bullet_points.findIndex(j => j.company === jobDetails.company && j.position === jobDetails.position),
             category: selectedSkillCategory
           }
         }));
-        return bulletPoint;
+        
+        return bulletOptions[0];
       } else {
         throw new Error("Failed to generate bullet point");
       }

@@ -1,8 +1,19 @@
 import React from 'react';
 import { Download, CheckCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/Table';
-import Button from '../ui/Button';
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription, 
+  CardContent,
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell,
+  Button
+} from '../ui';
 import { useResumeContext } from '../../contexts/ResumeContext';
 
 /**
