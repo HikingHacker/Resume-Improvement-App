@@ -138,7 +138,7 @@ const AddMissingSkills = ({
               >
                 <div className="flex justify-between items-center">
                   <h4 className="font-medium text-gray-800 dark:text-gray-200">{category.category}</h4>
-                  <span className="px-2 py-1 text-xs rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300">
+                  <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 min-w-[60px] text-center">
                     {category.skills.length} skills
                   </span>
                 </div>
