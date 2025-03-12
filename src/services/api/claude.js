@@ -5,6 +5,13 @@
  * resume improvement functionality.
  */
 
+import {
+  BULLET_IMPROVEMENT_SYSTEM_PROMPT,
+  getBulletImprovementPrompt,
+  RESUME_PARSER_SYSTEM_PROMPT,
+  getResumeParserPrompt
+} from './prompts';
+
 // Configuration will be loaded from environment variables 
 const CLAUDE_CONFIG = {
   apiKey: process.env.REACT_APP_ANTHROPIC_API_KEY,
@@ -79,29 +86,8 @@ export const callClaudeAPI = async (options) => {
  * @returns {Promise<Object>} - Improved bullet point data
  */
 export const improveBulletPoint = async (bulletPoint, additionalContext = '') => {
-  const systemPrompt = `
-    You are an expert resume writer who helps professionals improve their resume bullet points.
-    Your task is to enhance the given bullet point by:
-    1. Using stronger action verbs
-    2. Highlighting quantifiable achievements
-    3. Focusing on impact and results
-    4. Making technical skills and technologies stand out
-    5. Ensuring conciseness (ideally under 2 lines)
-    
-    Respond with ONLY a JSON object containing the following fields:
-    - multipleSuggestions: An array of 3 distinct improved versions of the bullet point, each offering a different approach or emphasis
-    - reasoning: Brief explanation of the improvements you made and how each variation differs
-    - remainingWeaknesses: One or two specific areas where the bullet point could still be improved (be specific and constructive)
-    - followUpQuestions: An array of 3 questions to elicit more information that could further improve the bullet point
-  `;
-
-  const prompt = `
-    Original Bullet Point: "${bulletPoint}"
-    
-    ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
-    
-    Please provide three different improved versions of this resume bullet point, each with a slightly different emphasis or approach. Make all versions impactful and professional.
-  `;
+  const systemPrompt = BULLET_IMPROVEMENT_SYSTEM_PROMPT;
+  const prompt = getBulletImprovementPrompt(bulletPoint, additionalContext);
 
   try {
     const response = await callClaudeAPI({
@@ -148,19 +134,8 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
  * @returns {Promise<string[]>} - Array of extracted bullet points
  */
 export const extractBulletPoints = async (resumeText) => {
-  const systemPrompt = `
-    You are an expert resume parser. Your task is to extract professional bullet points from a resume.
-    Focus on experience, skills, and achievements sections.
-    Identify and format each achievement or responsibility as a separate bullet point.
-    Return ONLY a JSON array of strings, with each string being a bullet point.
-  `;
-
-  const prompt = `
-    Here is the resume text:
-    "${resumeText}"
-    
-    Please extract the professional bullet points from this resume.
-  `;
+  const systemPrompt = RESUME_PARSER_SYSTEM_PROMPT;
+  const prompt = getResumeParserPrompt(resumeText);
 
   try {
     const response = await callClaudeAPI({

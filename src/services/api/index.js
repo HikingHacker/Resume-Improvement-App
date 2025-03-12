@@ -11,6 +11,7 @@
  */
 
 import claudeAPI from './claude';
+import prompts from './prompts';
 
 // Configuration values - would come from environment variables in production
 const API_CONFIG = {
@@ -791,4 +792,6 @@ export const ResumeAPI = {
   }
 };
 
+// Export the ResumeAPI and prompts
+export { prompts };
 export default ResumeAPI;

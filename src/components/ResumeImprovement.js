@@ -23,6 +23,7 @@ import {
   useTheme
 } from './ui';
 import useResumeService from '../services/hooks/useResumeService';
+import { prompts } from '../services/api';
 import AddMissingSkills from './steps/AddMissingSkills';
 
 // Using our modularized ConfirmationModal component from UI library
@@ -84,6 +85,38 @@ const ResumeImprovement = () => {
     }
   };
   
+  // Function to generate related keywords for a skill using Claude AI
+  const generateRelatedKeywords = async (skillName, skillRecommendation, jobDetails) => {
+    try {
+      setLoading(prev => ({ ...prev, keywords: true }));
+      
+      // Use the centralized prompt from prompts.js
+      const context = prompts.getRelatedKeywordsPrompt(skillName, skillRecommendation, jobDetails);
+      
+      // Use the AI suggestions service
+      const result = await getAISuggestions(`Generate keywords for ${skillName}`, context);
+      
+      if (result && result.improvedBulletPoint) {
+        // Parse keywords from the result - assuming one per line
+        const keywords = result.improvedBulletPoint
+          .split(/\n|•|-|,/)
+          .map(keyword => keyword.trim())
+          .filter(keyword => keyword.length > 0);
+        
+        // Limit to 15 keywords
+        return keywords.slice(0, 15);
+      } else {
+        throw new Error("Failed to generate keywords");
+      }
+    } catch (error) {
+      console.error("Error generating keywords:", error);
+      setErrors(prev => ({ ...prev, keywords: "Failed to generate related keywords. Please try again." }));
+      return [];
+    } finally {
+      setLoading(prev => ({ ...prev, keywords: false }));
+    }
+  };
+  
   // Function to generate multiple bullet point options for a missing skill using Claude AI
   const generateSkillBullet = async (skillName, skillRecommendation, jobDetails) => {
     try {
@@ -97,26 +130,8 @@ const ResumeImprovement = () => {
         return newSkillBullets[skillId];
       }
       
-      // Create a prompt for Claude to generate multiple bullet point options
-      const context = `
-        Generate 3 different strong resume bullet point options that demonstrate the skill "${skillName}" for a person in the following role:
-        Position: ${jobDetails.position}
-        Company: ${jobDetails.company}
-        Time Period: ${jobDetails.time_period || 'Current'}
-        
-        Each bullet point should:
-        1. Start with a strong action verb
-        2. Include specific metrics or quantifiable achievements (you can make up reasonable numbers)
-        3. Show impact and results
-        4. Be concise (1-2 lines)
-        5. Incorporate relevant technical terms if applicable
-        
-        Provide 3 different approaches or emphasis for the same skill.
-        
-        Skill recommendation context: ${skillRecommendation}
-        
-        Format your response as multiple bullet options separated by ### between each option.
-      `;
+      // Use the prompt from our centralized prompts file
+      const context = prompts.getSkillBulletPrompt(skillName, skillRecommendation, jobDetails);
       
       // Use the bullet improvement service but with our custom context
       const result = await getAISuggestions(`Add a bullet point for ${skillName}`, context);
