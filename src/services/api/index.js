@@ -222,16 +222,44 @@ const generateMockAnalysis = (resumeData) => {
 };
 
 /**
- * Request rate limiter implementation
+ * Request rate limiter implementation 
+ * Uses the token bucket algorithm for rate limiting
  */
 class RateLimiter {
+  /**
+   * Create a new rate limiter
+   * 
+   * @param {number} maxRequests - Maximum number of requests allowed in the time window
+   * @param {number} timeWindow - Time window in milliseconds
+   */
   constructor(maxRequests, timeWindow) {
     this.maxRequests = maxRequests;
     this.timeWindow = timeWindow;
     this.requestTimestamps = [];
+    this.initialized = false;
+    this.lastWarningTime = 0;
   }
 
+  /**
+   * Initialize the rate limiter
+   * This is done lazily to avoid unnecessary initialization in test environments
+   */
+  initialize() {
+    if (!this.initialized) {
+      this.initialized = true;
+      this.requestTimestamps = [];
+      console.log(`Rate limiter initialized: ${this.maxRequests} requests per ${this.timeWindow/1000}s`);
+    }
+  }
+
+  /**
+   * Get a token for making a request
+   * If no tokens are available, waits until one becomes available
+   * 
+   * @returns {Promise<boolean>} - Resolves to true when a token is acquired
+   */
   async acquireToken() {
+    this.initialize();
     const now = Date.now();
     
     // Remove timestamps outside the current time window
@@ -239,20 +267,44 @@ class RateLimiter {
       timestamp => now - timestamp < this.timeWindow
     );
     
+    // If we've hit the limit, wait until a token becomes available
     if (this.requestTimestamps.length >= this.maxRequests) {
       const oldestTimestamp = this.requestTimestamps[0];
       const waitTime = this.timeWindow - (now - oldestTimestamp);
-      console.warn(`Rate limit reached. Waiting ${waitTime}ms before retrying...`);
+      
+      // Avoid spamming the console with warnings
+      if (now - this.lastWarningTime > 5000) {
+        console.warn(`Rate limit reached. Waiting ${waitTime}ms before retrying...`);
+        this.lastWarningTime = now;
+      }
+      
       await delay(waitTime);
       return this.acquireToken(); // Recursive call after waiting
     }
     
+    // Add the current timestamp to the list
     this.requestTimestamps.push(now);
     return true;
   }
+  
+  /**
+   * Get the number of available tokens
+   * 
+   * @returns {number} - Number of available tokens
+   */
+  getAvailableTokens() {
+    const now = Date.now();
+    
+    // Remove timestamps outside the current time window
+    this.requestTimestamps = this.requestTimestamps.filter(
+      timestamp => now - timestamp < this.timeWindow
+    );
+    
+    return Math.max(0, this.maxRequests - this.requestTimestamps.length);
+  }
 }
 
-// Initialize the rate limiter
+// Initialize the rate limiter with configuration
 const rateLimiter = new RateLimiter(
   API_CONFIG.rateLimitRequests,
   API_CONFIG.rateLimitPeriod
@@ -260,6 +312,7 @@ const rateLimiter = new RateLimiter(
 
 /**
  * Base API request function with retry logic
+ * Implements advanced error handling, rate limiting, and retry patterns
  * 
  * @param {string} endpoint - API endpoint to call
  * @param {Object} options - Request options
@@ -268,6 +321,7 @@ const rateLimiter = new RateLimiter(
  * @param {Object} options.headers - Request headers
  * @param {number} options.timeout - Request timeout in ms
  * @param {boolean} options.useRateLimit - Whether to use rate limiting
+ * @param {boolean} options.cacheable - Whether the request can be cached
  * @returns {Promise<any>} - Promise that resolves to response data
  */
 async function apiRequest(endpoint, options = {}) {
@@ -277,6 +331,7 @@ async function apiRequest(endpoint, options = {}) {
     headers = {},
     timeout = API_CONFIG.timeout,
     useRateLimit = true,
+    cacheable = false,
   } = options;
 
   // Apply rate limiting if required
@@ -293,47 +348,87 @@ async function apiRequest(endpoint, options = {}) {
   // For real API calls, implement retry logic
   let attempts = 0;
   let lastError = null;
+  const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
+  console.log(`[${requestId}] API Request: ${method} ${endpoint}`);
+  const startTime = Date.now();
 
   while (attempts < API_CONFIG.retryAttempts) {
     try {
+      // Set up request timeout with AbortController
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.warn(`[${requestId}] Request timeout after ${timeout}ms`);
+      }, timeout);
 
+      // Make the API request
       const response = await fetch(`${API_CONFIG.baseUrl}${endpoint}`, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          'X-Request-ID': requestId,
           ...headers,
         },
         body: body ? JSON.stringify(body) : null,
         signal: controller.signal,
       });
 
+      // Clear the timeout
       clearTimeout(timeoutId);
 
+      // Handle non-successful responses
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `API request failed with status ${response.status}`
-        );
+        let errorMessage;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData?.message || `API request failed with status ${response.status}`;
+        } catch (parseError) {
+          errorMessage = `API request failed with status ${response.status}`;
+        }
+        
+        // Log error details
+        console.error(`[${requestId}] API Error:`, {
+          status: response.status,
+          statusText: response.statusText,
+          endpoint,
+          message: errorMessage
+        });
+        
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      // Parse and return successful response
+      const responseData = await response.json();
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] API Response: ${method} ${endpoint} (${duration}ms)`);
+      
+      return responseData;
     } catch (error) {
+      const duration = Date.now() - startTime;
       lastError = error;
       attempts++;
       
+      // Log the error with request context
+      console.error(`[${requestId}] Request failed (attempt ${attempts}/${API_CONFIG.retryAttempts}, ${duration}ms):`, 
+        error.name === 'AbortError' ? 'Request timeout' : error.message
+      );
+      
+      // Don't retry if we've reached the max attempts
       if (attempts >= API_CONFIG.retryAttempts) {
+        console.error(`[${requestId}] Max retry attempts reached`);
         break;
       }
       
-      // Exponential backoff for retries
-      const backoffTime = API_CONFIG.retryDelay * Math.pow(2, attempts - 1);
-      console.warn(`API request failed. Retrying in ${backoffTime}ms...`, error);
+      // Implement exponential backoff with jitter for retries
+      const jitter = Math.random() * 300;
+      const backoffTime = (API_CONFIG.retryDelay * Math.pow(2, attempts - 1)) + jitter;
+      console.warn(`[${requestId}] Retrying in ${Math.round(backoffTime)}ms...`);
       await delay(backoffTime);
     }
   }
 
+  // If we've exhausted all retries, throw the last error
   throw lastError;
 }
 
@@ -792,6 +887,15 @@ export const ResumeAPI = {
   }
 };
 
-// Export the ResumeAPI and prompts
-export { prompts };
+// Create a service factory for better testability and dependency injection
+const createResumeAPIService = (config = API_CONFIG) => {
+  return {
+    ...ResumeAPI,
+    getConfig: () => ({ ...config }),
+    getRateLimiter: () => rateLimiter
+  };
+};
+
+// Export the API service factory, prompts, and default instance
+export { prompts, createResumeAPIService };
 export default ResumeAPI;

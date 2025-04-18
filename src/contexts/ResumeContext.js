@@ -1,27 +1,7 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import useResumeService from '../services/hooks/useResumeService';
 
-// Initial state
-const initialState = {
-  step: 0,
-  resumeData: { bullet_points: [] },
-  flatBulletPoints: [],
-  currentJobIndex: null,
-  currentBulletIndex: null,
-  improvements: {},
-  additionalContexts: {},
-  showFollowUpForBullets: {},
-  resumeAnalysis: null,
-  savedBullets: {},
-  originalBullets: {},
-  resumeEdited: false,
-  editingJobIndex: null,
-  editingJob: null,
-  editingBulletInfo: { jobIndex: null, bulletIndex: null },
-  editedBullet: "",
-};
-
-// Action types
+// Define action types as constants to avoid typos
 const ActionTypes = {
   SET_STEP: 'SET_STEP',
   SET_RESUME_DATA: 'SET_RESUME_DATA',
@@ -43,66 +23,187 @@ const ActionTypes = {
   RESET_STATE: 'RESET_STATE',
 };
 
-// Reducer
+// Initial state with logical grouping of related state items
+const initialState = {
+  // UI navigation state
+  step: 0,
+  
+  // Resume content state
+  resumeData: { bullet_points: [] },
+  flatBulletPoints: [],
+  resumeAnalysis: null,
+  resumeEdited: false,
+  
+  // Selection state
+  currentJobIndex: null,
+  currentBulletIndex: null,
+  
+  // Improvements state
+  improvements: {},
+  additionalContexts: {},
+  showFollowUpForBullets: {},
+  savedBullets: {},
+  originalBullets: {},
+  
+  // Editing state
+  editingJobIndex: null,
+  editingJob: null,
+  editingBulletInfo: { jobIndex: null, bulletIndex: null },
+  editedBullet: "",
+};
+
+// Reducer with improved structure and organization by state section
 function resumeReducer(state, action) {
-  switch (action.type) {
+  const { type, payload } = action;
+  
+  switch (type) {
+    // UI navigation actions
     case ActionTypes.SET_STEP:
-      return { ...state, step: action.payload };
+      return { ...state, step: payload };
+    
+    // Resume content actions
     case ActionTypes.SET_RESUME_DATA:
-      return { ...state, resumeData: action.payload };
+      return { ...state, resumeData: payload };
     case ActionTypes.SET_FLAT_BULLET_POINTS:
-      return { ...state, flatBulletPoints: action.payload };
+      return { ...state, flatBulletPoints: payload };
+    case ActionTypes.SET_RESUME_ANALYSIS:
+      return { ...state, resumeAnalysis: payload };
+    case ActionTypes.SET_RESUME_EDITED:
+      return { ...state, resumeEdited: payload };
+    
+    // Selection actions  
     case ActionTypes.SET_CURRENT_JOB_INDEX:
-      return { ...state, currentJobIndex: action.payload };
+      return { ...state, currentJobIndex: payload };
     case ActionTypes.SET_CURRENT_BULLET_INDEX:
-      return { ...state, currentBulletIndex: action.payload };
+      return { ...state, currentBulletIndex: payload };
+    
+    // Improvements actions
     case ActionTypes.SET_IMPROVEMENTS:
-      return { ...state, improvements: action.payload };
+      return { ...state, improvements: payload };
     case ActionTypes.UPDATE_IMPROVEMENT:
       return { 
         ...state, 
         improvements: { 
           ...state.improvements, 
-          [action.payload.bulletId]: {
-            ...state.improvements[action.payload.bulletId],
-            ...action.payload.improvement
+          [payload.bulletId]: {
+            ...state.improvements[payload.bulletId],
+            ...payload.improvement
           }
         } 
       };
     case ActionTypes.SET_ADDITIONAL_CONTEXTS:
-      return { ...state, additionalContexts: action.payload };
+      return { ...state, additionalContexts: payload };
     case ActionTypes.SET_SHOW_FOLLOW_UP:
-      return { ...state, showFollowUpForBullets: action.payload };
-    case ActionTypes.SET_RESUME_ANALYSIS:
-      return { ...state, resumeAnalysis: action.payload };
+      return { ...state, showFollowUpForBullets: payload };
     case ActionTypes.SET_SAVED_BULLETS:
-      return { ...state, savedBullets: action.payload };
+      return { ...state, savedBullets: payload };
     case ActionTypes.SET_ORIGINAL_BULLETS:
-      return { ...state, originalBullets: action.payload };
-    case ActionTypes.SET_RESUME_EDITED:
-      return { ...state, resumeEdited: action.payload };
+      return { ...state, originalBullets: payload };
+    
+    // Editing actions
     case ActionTypes.SET_EDITING_JOB_INDEX:
-      return { ...state, editingJobIndex: action.payload };
+      return { ...state, editingJobIndex: payload };
     case ActionTypes.SET_EDITING_JOB:
-      return { ...state, editingJob: action.payload };
+      return { ...state, editingJob: payload };
     case ActionTypes.SET_EDITING_BULLET_INFO:
-      return { ...state, editingBulletInfo: action.payload };
+      return { ...state, editingBulletInfo: payload };
     case ActionTypes.SET_EDITED_BULLET:
-      return { ...state, editedBullet: action.payload };
+      return { ...state, editedBullet: payload };
+    
+    // Reset action
     case ActionTypes.RESET_STATE:
       return initialState;
+    
     default:
       return state;
   }
 }
 
-// Create context
-const ResumeContext = createContext();
+// Storage keys for localStorage persistence
+export const STORAGE_KEYS = Object.freeze({
+  RESUME_DATA: 'resume-improvement-app-data',
+  RESUME_STEP: 'resume-improvement-app-step',
+  RESUME_ANALYSIS: 'resume-improvement-app-analysis',
+  RESUME_IMPROVEMENTS: 'resume-improvement-app-improvements'
+});
+
+// Create context (using null for stronger typing with useContext)
+const ResumeContext = createContext(null);
+
+// Create action creators
+const actionCreators = {
+  setStep: (step) => ({ type: ActionTypes.SET_STEP, payload: step }),
+  setResumeData: (data) => ({ type: ActionTypes.SET_RESUME_DATA, payload: data }),
+  setFlatBulletPoints: (points) => ({ type: ActionTypes.SET_FLAT_BULLET_POINTS, payload: points }),
+  setCurrentJobIndex: (index) => ({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: index }),
+  setCurrentBulletIndex: (index) => ({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: index }),
+  setImprovements: (improvements) => ({ type: ActionTypes.SET_IMPROVEMENTS, payload: improvements }),
+  updateImprovement: (bulletId, improvement) => ({ 
+    type: ActionTypes.UPDATE_IMPROVEMENT, 
+    payload: { bulletId, improvement } 
+  }),
+  setAdditionalContexts: (contexts) => ({ type: ActionTypes.SET_ADDITIONAL_CONTEXTS, payload: contexts }),
+  setShowFollowUp: (bullets) => ({ type: ActionTypes.SET_SHOW_FOLLOW_UP, payload: bullets }),
+  setResumeAnalysis: (analysis) => ({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis }),
+  setSavedBullets: (bullets) => ({ type: ActionTypes.SET_SAVED_BULLETS, payload: bullets }),
+  setOriginalBullets: (bullets) => ({ type: ActionTypes.SET_ORIGINAL_BULLETS, payload: bullets }),
+  setResumeEdited: (edited) => ({ type: ActionTypes.SET_RESUME_EDITED, payload: edited }),
+  setEditingJobIndex: (index) => ({ type: ActionTypes.SET_EDITING_JOB_INDEX, payload: index }),
+  setEditingJob: (job) => ({ type: ActionTypes.SET_EDITING_JOB, payload: job }),
+  setEditingBulletInfo: (info) => ({ type: ActionTypes.SET_EDITING_BULLET_INFO, payload: info }),
+  setEditedBullet: (bullet) => ({ type: ActionTypes.SET_EDITED_BULLET, payload: bullet }),
+  resetState: () => ({ type: ActionTypes.RESET_STATE })
+};
+
+/**
+ * Load state from localStorage
+ * @returns {Object} Saved state or empty object if nothing is saved
+ */
+const loadStateFromStorage = () => {
+  try {
+    // Load step from localStorage
+    const savedStep = localStorage.getItem(STORAGE_KEYS.RESUME_STEP);
+    const step = savedStep ? JSON.parse(savedStep) : initialState.step;
+    
+    // Load resume data from localStorage
+    const savedResumeData = localStorage.getItem(STORAGE_KEYS.RESUME_DATA);
+    const resumeData = savedResumeData ? JSON.parse(savedResumeData) : initialState.resumeData;
+    
+    // Load resume analysis from localStorage
+    const savedAnalysis = localStorage.getItem(STORAGE_KEYS.RESUME_ANALYSIS);
+    const resumeAnalysis = savedAnalysis ? JSON.parse(savedAnalysis) : initialState.resumeAnalysis;
+    
+    // Load improvements from localStorage
+    const savedImprovements = localStorage.getItem(STORAGE_KEYS.RESUME_IMPROVEMENTS);
+    const improvements = savedImprovements ? JSON.parse(savedImprovements) : initialState.improvements;
+    
+    return {
+      ...initialState,
+      step,
+      resumeData,
+      resumeAnalysis,
+      improvements,
+      // Don't restore selection state to avoid potential errors
+      currentJobIndex: null,
+      currentBulletIndex: null
+    };
+  } catch (error) {
+    console.error('Error loading state from localStorage:', error);
+    return initialState;
+  }
+};
 
 // Provider component
 export function ResumeProvider({ children }) {
-  const [state, dispatch] = useReducer(resumeReducer, initialState);
+  // Initialize state from localStorage or use initialState as fallback
+  const [state, dispatch] = useReducer(resumeReducer, loadStateFromStorage());
   const resumeService = useResumeService();
+  
+  // Create bound action dispatchers
+  const actions = Object.entries(actionCreators).reduce((acc, [key, actionCreator]) => {
+    acc[key] = (...args) => dispatch(actionCreator(...args));
+    return acc;
+  }, {});
 
   // Helper function to calculate a unique ID for each bullet point
   const getBulletId = useCallback((jobIndex, bulletIndex) => {
@@ -119,18 +220,18 @@ export function ResumeProvider({ children }) {
   const handleFileUpload = useCallback(async (file) => {
     try {
       // Reset analysis-related state
-      dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: null });
-      dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: null });
-      dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: null });
-      dispatch({ type: ActionTypes.SET_IMPROVEMENTS, payload: {} });
-      dispatch({ type: ActionTypes.SET_SAVED_BULLETS, payload: {} });
+      actions.setResumeAnalysis(null);
+      actions.setCurrentJobIndex(null);
+      actions.setCurrentBulletIndex(null);
+      actions.setImprovements({});
+      actions.setSavedBullets({});
       
       const result = await resumeService.parseResume(file);
       
       // Handle structured data format
       if (result.parsedData && result.parsedData.bullet_points) {
-        dispatch({ type: ActionTypes.SET_RESUME_DATA, payload: result.parsedData });
-        dispatch({ type: ActionTypes.SET_FLAT_BULLET_POINTS, payload: result.bulletPoints || [] });
+        actions.setResumeData(result.parsedData);
+        actions.setFlatBulletPoints(result.bulletPoints || []);
         
         // Store original bullets
         const originalBulletsMap = {};
@@ -140,7 +241,7 @@ export function ResumeProvider({ children }) {
             originalBulletsMap[bulletId] = bullet;
           });
         });
-        dispatch({ type: ActionTypes.SET_ORIGINAL_BULLETS, payload: originalBulletsMap });
+        actions.setOriginalBullets(originalBulletsMap);
         
         // Check if we have any bullet points
         const totalBullets = result.parsedData.bullet_points.reduce(
@@ -157,11 +258,11 @@ export function ResumeProvider({ children }) {
       } 
       // Handle legacy flat format
       else if (result.bulletPoints && result.bulletPoints.length > 0) {
-        dispatch({ type: ActionTypes.SET_FLAT_BULLET_POINTS, payload: result.bulletPoints });
+        actions.setFlatBulletPoints(result.bulletPoints);
         
         // Create a structured format from the flat list
         const structuredData = createStructuredDataFromFlatBullets(result.bulletPoints);
-        dispatch({ type: ActionTypes.SET_RESUME_DATA, payload: structuredData });
+        actions.setResumeData(structuredData);
         
         // Store original bullets
         const originalBulletsMap = {};
@@ -171,7 +272,7 @@ export function ResumeProvider({ children }) {
             originalBulletsMap[bulletId] = bullet;
           });
         });
-        dispatch({ type: ActionTypes.SET_ORIGINAL_BULLETS, payload: originalBulletsMap });
+        actions.setOriginalBullets(originalBulletsMap);
       } 
       else {
         resumeService.setErrors(prev => ({ 
@@ -181,7 +282,7 @@ export function ResumeProvider({ children }) {
         return false;
       }
       
-      dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: false });
+      actions.setResumeEdited(false);
       
       // Start background analysis
       resumeService.setLoading(prev => ({ ...prev, analyze: true }));
@@ -190,21 +291,21 @@ export function ResumeProvider({ children }) {
       resumeService.analyzeResume(dataToAnalyze)
         .then(analysis => {
           if (analysis) {
-            dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis });
+            actions.setResumeAnalysis(analysis);
           }
         })
         .catch(error => {
           console.error("Background analysis error:", error);
         });
       
-      dispatch({ type: ActionTypes.SET_STEP, payload: 2 });
+      actions.setStep(2);
       return true;
     } catch (error) {
       console.error("Error parsing resume:", error);
       resumeService.setErrors(prev => ({ ...prev, parse: error.message || "Failed to parse your resume" }));
       return false;
     }
-  }, [resumeService, getBulletId]);
+  }, [resumeService, getBulletId, actions]);
 
   // Helper function to convert flat bullet points to structured format
   const createStructuredDataFromFlatBullets = useCallback((flatBullets) => {
@@ -425,8 +526,10 @@ export function ResumeProvider({ children }) {
   // Function to handle step navigation
   const handleStepNavigation = useCallback((newStep) => {
     // Check if step should be accessible
-    if (newStep > 0 && state.resumeData.bullet_points.length === 0) {
+    // Exception for step 1 (upload) which should always be accessible
+    if (newStep > 1 && state.resumeData.bullet_points.length === 0) {
       // Can't navigate to steps that require resume data
+      console.log("Navigation blocked: Resume data required for step", newStep);
       return;
     }
 
@@ -452,6 +555,7 @@ export function ResumeProvider({ children }) {
       }
     }
 
+    console.log("Navigating to step:", newStep);
     dispatch({ type: ActionTypes.SET_STEP, payload: newStep });
   }, [state.step, state.resumeData, state.resumeAnalysis]);
 
@@ -670,12 +774,64 @@ export function ResumeProvider({ children }) {
     return count;
   }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex]);
 
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      // Save step
+      localStorage.setItem(STORAGE_KEYS.RESUME_STEP, JSON.stringify(state.step));
+      
+      // Save resume data only if we have actual data (bullet points)
+      if (state.resumeData.bullet_points.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.RESUME_DATA, JSON.stringify(state.resumeData));
+      }
+      
+      // Save resume analysis
+      if (state.resumeAnalysis) {
+        localStorage.setItem(STORAGE_KEYS.RESUME_ANALYSIS, JSON.stringify(state.resumeAnalysis));
+      }
+      
+      // Save improvements if we have any
+      if (Object.keys(state.improvements).length > 0) {
+        localStorage.setItem(STORAGE_KEYS.RESUME_IMPROVEMENTS, JSON.stringify(state.improvements));
+      }
+    } catch (error) {
+      console.error('Error saving state to localStorage:', error);
+    }
+  }, [state.step, state.resumeData, state.resumeAnalysis, state.improvements]);
+
+  // Clear storage and reset state
+  const clearStorageAndResetState = useCallback(() => {
+    try {
+      // Clear all related localStorage items
+      Object.values(STORAGE_KEYS).forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Reset state
+      actions.resetState();
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
+  }, [actions]);
+
+  // Organize context value into logical sections
   const value = {
+    // State values
     ...state,
+    
+    // Service methods
     ...resumeService,
-    resetState,
+    
+    // Action creators/dispatchers
+    ...actions,
+    
+    // Helper functions
     getBulletId,
     getCurrentBulletId,
+    getTotalBulletPoints,
+    getCurrentBulletPointNumber,
+    
+    // Business logic methods
     handleFileUpload,
     handleBulletPointImprovement,
     handleAdditionalContextChange,
@@ -690,13 +846,9 @@ export function ResumeProvider({ children }) {
     saveEditedBullet,
     saveBulletPoint,
     handleExportResume,
-    getTotalBulletPoints,
-    getCurrentBulletPointNumber,
-    setStep: (step) => dispatch({ type: ActionTypes.SET_STEP, payload: step }),
-    setCurrentJobIndex: (index) => dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: index }),
-    setCurrentBulletIndex: (index) => dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: index }),
-    setResumeData: (data) => dispatch({ type: ActionTypes.SET_RESUME_DATA, payload: data }),
-    setEditingJob: (job) => dispatch({ type: ActionTypes.SET_EDITING_JOB, payload: job }),
+    
+    // Storage management
+    clearStorageAndResetState,
   };
 
   return (

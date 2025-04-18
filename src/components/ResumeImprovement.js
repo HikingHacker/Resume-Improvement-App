@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, Sun, Moon, CheckCircle, X, Info, Sparkles, ClipboardList, LineChart, Zap, Layers } from 'lucide-react';
+import React from 'react';
+import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, Sun, Moon, CheckCircle, X, Info, Sparkles, ClipboardList, LineChart, Zap, Layers, RotateCcw } from 'lucide-react';
 import { 
   Button, 
   Input, 
@@ -22,7 +22,7 @@ import {
   StepNavigation,
   useTheme
 } from './ui';
-import useResumeService from '../services/hooks/useResumeService';
+import { useResumeContext } from '../contexts/ResumeContext';
 import { prompts } from '../services/api';
 import AddMissingSkills from './steps/AddMissingSkills';
 
@@ -30,41 +30,99 @@ import AddMissingSkills from './steps/AddMissingSkills';
 
 // Using our modularized StepNavigation component from UI library
 
+/**
+ * Main Resume Improvement component
+ * Uses ResumeContext for state management with localStorage persistence
+ * 
+ * This component has been converted to use the shared context for state
+ * management rather than local component state. The context includes
+ * localStorage persistence to maintain state between page refreshes.
+ */
 const ResumeImprovement = () => {
-  const { loading, setLoading, errors, setErrors, parseResume, getAISuggestions, analyzeResume, exportResume, getImprovementAnalytics } = useResumeService();
-  const [step, setStep] = useState(0); // 0: feature selection, 1: upload, 2: overview, 2.5: analysis, 3: bullet improvement, 3.5: improvement analytics, 3.75: add missing skills, 4: final review
-  const [resumeData, setResumeData] = useState({ bullet_points: [] });
-  const [flatBulletPoints, setFlatBulletPoints] = useState([]);
-  const [currentJobIndex, setCurrentJobIndex] = useState(null);
-  const [currentBulletIndex, setCurrentBulletIndex] = useState(null);
-  const [improvements, setImprovements] = useState({});
-  const [additionalContexts, setAdditionalContexts] = useState({});
-  const [showFollowUpForBullets, setShowFollowUpForBullets] = useState({});
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [resumeAnalysis, setResumeAnalysis] = useState(null);
-  const [savedBullets, setSavedBullets] = useState({});
-  const [originalBullets, setOriginalBullets] = useState({}); // Store original bullets separately
-  const [resumeEdited, setResumeEdited] = useState(false);
-  // State for AI analytics recommendations
-  const [aiRecommendations, setAiRecommendations] = useState(null);
+  // Using the shared context instead of local state
+  const { 
+    // State values
+    step,
+    resumeData,
+    flatBulletPoints,
+    currentJobIndex, 
+    currentBulletIndex,
+    improvements,
+    additionalContexts,
+    showFollowUpForBullets,
+    resumeAnalysis,
+    savedBullets,
+    originalBullets,
+    resumeEdited,
+    
+    // Loading and error states
+    loading,
+    errors,
+    
+    // Action creators - these correspond to SET_X actions
+    setStep,
+    setResumeData,
+    setCurrentJobIndex,
+    setCurrentBulletIndex,
+    setResumeEdited,
+    setImprovements,
+    updateImprovement,
+    
+    // Helper methods for operations
+    startOperation,
+    endOperation,
+    setErrors,
+    
+    // Resume service methods
+    parseResume,
+    getAISuggestions,
+    analyzeResume,
+    exportResume,
+    getImprovementAnalytics,
+    
+    // Business logic methods
+    handleFileUpload,
+    handleBulletPointImprovement,
+    handleAdditionalContextChange,
+    handleAdditionalContextSubmit,
+    navigateBulletPoints,
+    handleStepNavigation,
+    getResumeAnalysis,
+    handleNavigation,
+    saveBulletPoint,
+    handleExportResume,
+    clearStorageAndResetState,
+    
+    // Helper functions
+    getBulletId,
+    getCurrentBulletId,
+    getTotalBulletPoints,
+    getCurrentBulletPointNumber
+  } = useResumeContext();
+  
+  // Local UI state only
+  const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+  const [showResetModal, setShowResetModal] = React.useState(false);
+  const [aiRecommendations, setAiRecommendations] = React.useState(null);
   
   // State for managing missing skills bullets
-  const [newSkillBullets, setNewSkillBullets] = useState({});
-  const [selectedSkillCategory, setSelectedSkillCategory] = useState(null);
-  const [selectedSkill, setSelectedSkill] = useState(null);
-  const [targetJobForSkill, setTargetJobForSkill] = useState(null);
-  const [generatingSkillBullet, setGeneratingSkillBullet] = useState(false);
+  const [newSkillBullets, setNewSkillBullets] = React.useState({});
+  const [selectedSkillCategory, setSelectedSkillCategory] = React.useState(null);
+  const [selectedSkill, setSelectedSkill] = React.useState(null);
+  const [targetJobForSkill, setTargetJobForSkill] = React.useState(null);
+  const [generatingSkillBullet, setGeneratingSkillBullet] = React.useState(false);
   
   // State for editing job details in overview
-  const [editingJobIndex, setEditingJobIndex] = useState(null);
-  const [editingJob, setEditingJob] = useState(null);
-  const [editingBulletInfo, setEditingBulletInfo] = useState({ jobIndex: null, bulletIndex: null });
-  const [editedBullet, setEditedBullet] = useState("");
+  const [editingJobIndex, setEditingJobIndex] = React.useState(null);
+  const [editingJob, setEditingJob] = React.useState(null);
+  const [editingBulletInfo, setEditingBulletInfo] = React.useState({ jobIndex: null, bulletIndex: null });
+  const [editedBullet, setEditedBullet] = React.useState("");
 
   // Function to fetch AI-powered analytics and recommendations
   const getAnalytics = async () => {
     try {
-      setLoading(prev => ({ ...prev, analytics: true }));
+      // Use context startOperation method instead of direct setLoading
+      startOperation("analytics");
       
       const analyticsData = await getImprovementAnalytics(
         resumeData, 
@@ -80,20 +138,35 @@ const ResumeImprovement = () => {
       }
     } catch (error) {
       console.error("Error fetching AI analytics:", error);
+      // Use context setErrors method
+      setErrors(prev => ({ ...prev, analytics: error.message || "Failed to get AI analytics data" }));
     } finally {
-      setLoading(prev => ({ ...prev, analytics: false }));
+      // Use context endOperation method instead of direct setLoading
+      endOperation("analytics");
     }
   };
   
+  // Add a new UI action for clearing storage and resetting state
+  const handleClearStorage = () => {
+    setShowResetModal(true);
+  };
+
+  const handleConfirmReset = () => {
+    clearStorageAndResetState();
+    setShowResetModal(false);
+  };
+
   // Function to generate related keywords for a skill using Claude AI
   const generateRelatedKeywords = async (skillName, skillRecommendation, jobDetails) => {
     try {
-      setLoading(prev => ({ ...prev, keywords: true }));
+      setGeneratingSkillBullet(true);
+      // Use context startOperation instead of direct state manipulation
+      startOperation("keywords");
       
       // Use the centralized prompt from prompts.js
       const context = prompts.getRelatedKeywordsPrompt(skillName, skillRecommendation, jobDetails);
       
-      // Use the AI suggestions service
+      // Call getAISuggestions from context
       const result = await getAISuggestions(`Generate keywords for ${skillName}`, context);
       
       if (result && result.improvedBulletPoint) {
@@ -110,10 +183,13 @@ const ResumeImprovement = () => {
       }
     } catch (error) {
       console.error("Error generating keywords:", error);
+      // Use context setErrors method
       setErrors(prev => ({ ...prev, keywords: "Failed to generate related keywords. Please try again." }));
       return [];
     } finally {
-      setLoading(prev => ({ ...prev, keywords: false }));
+      // Use context endOperation method
+      endOperation("keywords");
+      setGeneratingSkillBullet(false);
     }
   };
   
@@ -121,6 +197,8 @@ const ResumeImprovement = () => {
   const generateSkillBullet = async (skillName, skillRecommendation, jobDetails) => {
     try {
       setGeneratingSkillBullet(true);
+      // Use context startOperation
+      startOperation("generate");
       
       // Create a unique ID for this skill+job combination
       const skillId = `${skillName}-${jobDetails.company}-${jobDetails.position}`.replace(/\s+/g, '-').toLowerCase();
@@ -180,355 +258,55 @@ const ResumeImprovement = () => {
       }
     } catch (error) {
       console.error("Error generating skill bullet:", error);
+      // Use context setErrors
       setErrors(prev => ({ ...prev, generate: "Failed to generate bullet point. Please try again." }));
       return null;
     } finally {
+      // Use context endOperation
+      endOperation("generate");
       setGeneratingSkillBullet(false);
     }
   };
 
-  const resetState = () => {
-    setStep(0);
-    setResumeData({ bullet_points: [] });
-    setFlatBulletPoints([]);
-    setCurrentJobIndex(null);
-    setCurrentBulletIndex(null);
-    setImprovements({});
-    setAdditionalContexts({});
-    setShowFollowUpForBullets({});
-    setEditingJobIndex(null);
-    setEditingJob(null);
-    setEditingBulletInfo({ jobIndex: null, bulletIndex: null });
-    setEditedBullet("");
-    setResumeAnalysis(null);
-    setSavedBullets({});
-    setOriginalBullets({});
-    setAiRecommendations(null);
-    setNewSkillBullets({});
-    setSelectedSkillCategory(null);
-    setSelectedSkill(null);
-    setTargetJobForSkill(null);
-    setGeneratingSkillBullet(false);
-  };
+  // This function is no longer needed - we're using clearStorageAndResetState from context
 
-  const handleFileUpload = async (event) => {
+  // We've renamed this since handleFileUpload is already imported from context
+  const onFileInputChange = async (event) => {
     const file = event.target.files[0];
-    if (file) {
-      try {
-        // Reset all state related to the resume when a new file is uploaded
-        setResumeAnalysis(null);
-        setCurrentJobIndex(null);
-        setCurrentBulletIndex(null);
-        setImprovements({});
-        setSavedBullets({});
-        
-        const result = await parseResume(file);
-        console.log("Resume parsing result:", result);
-        
-        // Handle various response formats
-        if (result.parsedData && result.parsedData.bullet_points) {
-          // New structured format
-          console.log("Using structured data format with", 
-            result.parsedData.bullet_points.length, "job positions and",
-            result.parsedData.bullet_points.reduce((sum, job) => sum + (job.achievements?.length || 0), 0), 
-            "total bullet points");
-          
-          setResumeData(result.parsedData);
-          setFlatBulletPoints(result.bulletPoints || []);
-          
-          // Store the original bullet points when first loading the resume
-          const originalBulletsMap = {};
-          result.parsedData.bullet_points.forEach((job, jobIndex) => {
-            job.achievements?.forEach((bullet, bulletIndex) => {
-              const bulletId = getBulletId(jobIndex, bulletIndex);
-              originalBulletsMap[bulletId] = bullet;
-            });
-          });
-          setOriginalBullets(originalBulletsMap);
-          
-          // Check if we actually have any bullet points
-          const totalBullets = result.parsedData.bullet_points.reduce(
-            (sum, job) => sum + (job.achievements?.length || 0), 0
-          );
-          
-          if (totalBullets === 0) {
-            console.error("No bullet points found in parsed data");
-            setErrors(prev => ({ ...prev, parse: "No bullet points were extracted from your resume. Please try a different file." }));
-            return;
-          }
-        } else if (result.bulletPoints && result.bulletPoints.length > 0) {
-          // Legacy flat format
-          console.log("Using legacy format with", result.bulletPoints.length, "bullet points");
-          setFlatBulletPoints(result.bulletPoints);
-          
-          // Create a structured format from the flat list
-          const structuredData = createStructuredDataFromFlatBullets(result.bulletPoints);
-          setResumeData(structuredData);
-          
-          // Store the original bullet points when first loading the resume
-          const originalBulletsMap = {};
-          structuredData.bullet_points.forEach((job, jobIndex) => {
-            job.achievements?.forEach((bullet, bulletIndex) => {
-              const bulletId = getBulletId(jobIndex, bulletIndex);
-              originalBulletsMap[bulletId] = bullet;
-            });
-          });
-          setOriginalBullets(originalBulletsMap);
-        } else {
-          // No usable data
-          console.error("No usable data in parsing result");
-          setErrors(prev => ({ ...prev, parse: "Failed to extract any content from your resume. Please try a different file format." }));
-          return;
-        }
-        
-        setResumeEdited(false); // Reset edit flag on new upload
-        
-        // Immediately begin the resume analysis in the background
-        // This preloads the analysis while the user is on the overview page
-        console.log("Starting background analysis after file upload...");
-        const dataToAnalyze = result.parsedData || structuredData;
-        setLoading(prev => ({ ...prev, analyze: true }));
-        
-        // Trigger analysis immediately to prepare data before user goes to analysis page
-        analyzeResume(dataToAnalyze)
-          .then(analysis => {
-            if (analysis) {
-              setResumeAnalysis(analysis);
-              console.log("Background analysis completed successfully");
-            }
-          })
-          .catch(error => {
-            console.error("Background analysis error:", error);
-          });
-        
-        // Go to resume overview page and scroll to top
-        window.scrollTo(0, 0);
-        setStep(2);
-      } catch (error) {
-        console.error("Error parsing resume:", error);
-        setErrors(prev => ({ ...prev, parse: error.message || "Failed to parse your resume" }));
-      }
+    
+    if (!file) {
+      return;
     }
+    
+    // Check if file is a PDF, Word, or text file
+    if (file.type !== 'application/pdf' && 
+        file.type !== 'text/plain' && 
+        file.type !== 'application/msword' && 
+        file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      // Use context setErrors instead of local state
+      setErrors(prev => ({ 
+        ...prev, 
+        parse: "Please upload a PDF, Word, or text file." 
+      }));
+      return;
+    }
+    
+    // Use the context's handleFileUpload function which will handle all state updates
+    await handleFileUpload(file);
   };
   
-  // Helper function to convert flat bullet points to structured format
-  const createStructuredDataFromFlatBullets = (flatBullets) => {
-    const structuredData = { bullet_points: [] };
-    let currentJob = null;
-    
-    for (const bullet of flatBullets) {
-      // Check if this is a position/job header
-      if (bullet.startsWith("POSITION:") || bullet.includes(" at ")) {
-        // Extract company and position information
-        let position = "Unknown Position";
-        let company = "Unknown Company";
-        let timePeriod = "";
-        
-        // Try to parse the position line
-        const positionLine = bullet.replace("POSITION:", "").trim();
-        
-        // Check for "Position at Company (Date)" format
-        const positionMatch = positionLine.match(/(.+?)\s+at\s+(.+?)(?:\s+\((.+?)\))?$/);
-        if (positionMatch) {
-          position = positionMatch[1].trim();
-          company = positionMatch[2].trim();
-          timePeriod = positionMatch[3] ? positionMatch[3].trim() : "";
-        } else {
-          // Just use the whole line as position
-          position = positionLine;
-        }
-        
-        // Create a new job entry
-        currentJob = {
-          company,
-          position,
-          time_period: timePeriod,
-          achievements: []
-        };
-        
-        structuredData.bullet_points.push(currentJob);
-      } 
-      // If it's a bullet point and we have a current job, add it as an achievement
-      else if (currentJob && (bullet.startsWith("•") || bullet.startsWith("-") || bullet.startsWith("*") || /^\d+\./.test(bullet))) {
-        // Clean the bullet point
-        const cleanBullet = bullet.replace(/^[•\-*]\s*/, "").trim();
-        currentJob.achievements.push(cleanBullet);
-      }
-      // If there's no current job yet, create a default one
-      else if (!currentJob && bullet.trim()) {
-        currentJob = {
-          company: "Unknown Company",
-          position: "Unknown Position",
-          time_period: "",
-          achievements: [bullet.trim()]
-        };
-        structuredData.bullet_points.push(currentJob);
-      }
-    }
-    
-    // If we didn't find any structured data, create a default job with all bullets
-    if (structuredData.bullet_points.length === 0 && flatBullets.length > 0) {
-      structuredData.bullet_points.push({
-        company: "Unknown Company",
-        position: "Unknown Position",
-        time_period: "",
-        achievements: flatBullets.map(b => b.replace(/^[•\-*]\s*/, "").trim())
-      });
-    }
-    
-    console.log("Created structured data:", structuredData);
-    return structuredData;
-  };
+  // These functions are now handled by the context
 
-  // Get the current bullet point based on job and bullet indices
-  const getCurrentBulletPoint = () => {
-    const jobs = resumeData.bullet_points;
-    if (jobs.length === 0 || currentJobIndex === null || currentBulletIndex === null) return null;
-    
-    const currentJob = jobs[currentJobIndex];
-    if (!currentJob || !currentJob.achievements || currentJob.achievements.length === 0) return null;
-    
-    return currentJob.achievements[currentBulletIndex];
-  };
-
-  // Calculate a unique ID for each bullet point
-  const getBulletId = (jobIndex, bulletIndex) => {
-    return `job${jobIndex}-bullet${bulletIndex}`;
-  };
-
-  const getCurrentBulletId = () => {
-    if (currentJobIndex === null || currentBulletIndex === null) return null;
-    return getBulletId(currentJobIndex, currentBulletIndex);
-  };
-
-  const handleBulletPointImprovement = async () => {
-    const currentBullet = getCurrentBulletPoint();
-    if (!currentBullet || currentJobIndex === null || currentBulletIndex === null) {
-      console.error("No bullet point selected for improvement");
-      return;
-    }
-    
-    const currentJob = resumeData.bullet_points[currentJobIndex];
-    const bulletId = getCurrentBulletId();
-    
-    try {
-      // Include job context in the additional context
-      const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-      const userContext = Object.values(additionalContexts[bulletId] || {}).join(' ');
-      const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-      
-      const suggestions = await getAISuggestions(currentBullet, contextToSend);
-      
-      if (suggestions) {
-        // Make sure we have at least one suggestion, even if the multipleSuggestions array is empty
-        let finalSuggestions = suggestions.multipleSuggestions || [];
-        if (finalSuggestions.length === 0 && suggestions.improvedBulletPoint) {
-          finalSuggestions = [suggestions.improvedBulletPoint];
-        }
-        
-        // Store all suggestions and use the first one as the default
-        setImprovements(prev => ({
-          ...prev,
-          [bulletId]: {
-            ...suggestions,
-            multipleSuggestions: finalSuggestions,
-            selectedVariation: 0, // Default to first variation
-            currentlyEditing: finalSuggestions[0] || suggestions.improvedBulletPoint 
-          }
-        }));
-        setShowFollowUpForBullets(prev => ({
-          ...prev,
-          [bulletId]: true
-        }));
-      }
-    } catch (error) {
-      console.error("Error getting AI suggestions:", error);
+  // We're using the context version of this function now
+  const triggerBulletImprovement = () => {
+    if (currentJobIndex !== null && currentBulletIndex !== null) {
+      handleBulletPointImprovement();
     }
   };
 
-  const handleAdditionalContextChange = (questionIndex, value) => {
-    const bulletId = getCurrentBulletId();
-    setAdditionalContexts(prev => ({
-      ...prev,
-      [bulletId]: {
-        ...(prev[bulletId] || {}),
-        [questionIndex]: value
-      }
-    }));
-  };
+  // We're using the context version of these functions now
 
-  const handleAdditionalContextSubmit = async () => {
-    const currentBullet = getCurrentBulletPoint();
-    if (!currentBullet) return;
-    
-    const currentJob = resumeData.bullet_points[currentJobIndex];
-    const bulletId = getCurrentBulletId();
-    
-    try {
-      // Include job context in the additional context
-      const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-      const userContext = Object.values(additionalContexts[bulletId] || {}).join(' ');
-      const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-      
-      const newSuggestions = await getAISuggestions(currentBullet, contextToSend);
-      
-      if (newSuggestions) {
-        setImprovements(prev => ({
-          ...prev,
-          [bulletId]: newSuggestions
-        }));
-      }
-    } catch (error) {
-      console.error("Error getting updated AI suggestions:", error);
-    }
-  };
-
-  // Navigate between bullet points within and across jobs
-  const navigateBulletPoints = (direction) => {
-    const jobs = resumeData.bullet_points;
-    if (jobs.length === 0) return;
-    
-    // If no current selection, select the first bullet of the first job
-    if (currentJobIndex === null || currentBulletIndex === null) {
-      setCurrentJobIndex(0);
-      setCurrentBulletIndex(0);
-      return;
-    }
-    
-    const currentJob = jobs[currentJobIndex];
-    if (!currentJob || !currentJob.achievements) return;
-    
-    if (direction === 'next') {
-      // If not at the last bullet point in the current job
-      if (currentBulletIndex < currentJob.achievements.length - 1) {
-        setCurrentBulletIndex(currentBulletIndex + 1);
-      }
-      // If at the last bullet point of the current job but not the last job
-      else if (currentJobIndex < jobs.length - 1) {
-        setCurrentJobIndex(currentJobIndex + 1);
-        setCurrentBulletIndex(0);
-      }
-      // At the very last bullet point
-      else {
-        // Move to improvement analytics instead of final review
-        window.scrollTo(0, 0);
-        setStep(3.5);
-      }
-    } else if (direction === 'prev') {
-      // If not at the first bullet point in the current job
-      if (currentBulletIndex > 0) {
-        setCurrentBulletIndex(currentBulletIndex - 1);
-      }
-      // If at the first bullet point of the current job but not the first job
-      else if (currentJobIndex > 0) {
-        setCurrentJobIndex(currentJobIndex - 1);
-        const prevJob = jobs[currentJobIndex - 1];
-        if (prevJob && prevJob.achievements) {
-          setCurrentBulletIndex(Math.max(0, prevJob.achievements.length - 1));
-        }
-      }
-    }
-  };
+  // Using context version of this function
 
   // Define the navigation steps
   const navigationSteps = [
@@ -553,130 +331,10 @@ const ResumeImprovement = () => {
     return step > stepValue;
   };
 
-  // Function to handle direct step navigation
-  const handleStepNavigation = (newStep) => {
-    // Check if step should be accessible
-    if (newStep > 0 && resumeData.bullet_points.length === 0) {
-      // Can't navigate to steps that require resume data
-      return;
-    }
+  // These navigation functions are now handled by the context
 
-    if (newStep === 2.5 && !resumeAnalysis) {
-      // Trigger analysis when navigating directly to analysis step
-      getResumeAnalysis();
-    }
-
-    // Special case for moving back to bullet improvement from final review
-    if (step === 4 && newStep === 3) {
-      // Go to the last bullet point
-      const jobs = resumeData.bullet_points;
-      if (jobs.length > 0) {
-        const lastJobIndex = jobs.length - 1;
-        const lastJob = jobs[lastJobIndex];
-        if (lastJob && lastJob.achievements) {
-          setCurrentJobIndex(lastJobIndex);
-          setCurrentBulletIndex(Math.max(0, lastJob.achievements.length - 1));
-        }
-      }
-    }
-
-    setStep(newStep);
-  };
-
-  const handleNavigation = (direction) => {
-    if (direction === 'back') {
-      if (step === 1) {
-        // From upload back to feature selection
-        setStep(0);
-      } else if (step === 2) {
-        // From overview back to upload
-        setStep(1);
-      } else if (step === 2.5) {
-        // From analysis back to overview
-        setStep(2);
-      } else if (step === 3) {
-        // From bullet improvement back to analysis
-        setStep(2.5);
-      } else if (step === 3.5) {
-        // From improvement review back to bullet improvement
-        setStep(3);
-      } else if (step === 3.75) {
-        // From add missing skills back to improvement review
-        setStep(3.5);
-      } else if (step === 4) {
-        // From final review back to missing skills
-        setStep(3.75);
-      } else if (step > 0) {
-        setStep(step - 1);
-      }
-    } else if (direction === 'forward') {
-      if (step === 3) {
-        // If we're in the bullet improvement step and there's no selection yet,
-        // select the first bullet point of the first job
-        if (currentJobIndex === null || currentBulletIndex === null) {
-          const jobs = resumeData.bullet_points;
-          if (jobs.length > 0) {
-            setCurrentJobIndex(0);
-            setCurrentBulletIndex(0);
-          }
-        } else {
-          navigateBulletPoints('next');
-        }
-      } else if (step < 4) {
-        // Handle special case for floating point step
-        if (step === 2.5) {
-          setStep(3);
-          
-          // Initialize selection to first bullet if needed
-          if (currentJobIndex === null || currentBulletIndex === null) {
-            const jobs = resumeData.bullet_points;
-            if (jobs.length > 0) {
-              setCurrentJobIndex(0);
-              setCurrentBulletIndex(0);
-            }
-          }
-        } else if (step === 3.5) {
-          // From improvement review to add missing skills
-          setStep(3.75);
-        } else if (step === 3.75) {
-          // From add missing skills to final review
-          setStep(4);
-        } else {
-          setStep(step + 1);
-        }
-      }
-    }
-  };
-
-  const handleConfirmReset = () => {
-    resetState();
-    setShowConfirmModal(false);
-  };
-
-  const getTotalBulletPoints = () => {
-    return resumeData.bullet_points.reduce((total, job) => {
-      return total + (job.achievements ? job.achievements.length : 0);
-    }, 0);
-  };
-
-  const getCurrentBulletPointNumber = () => {
-    let count = 0;
-    const jobs = resumeData.bullet_points;
-    
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      if (!job.achievements) continue;
-      
-      if (i < currentJobIndex) {
-        count += job.achievements.length;
-      } else if (i === currentJobIndex) {
-        count += currentBulletIndex + 1;
-        break;
-      }
-    }
-    
-    return count;
-  };
+  // These functions are now provided by the context
+  // Using getTotalBulletPoints and getCurrentBulletPointNumber from context
 
   const renderProgressBar = () => {
     const totalBullets = getTotalBulletPoints();
@@ -711,7 +369,10 @@ const ResumeImprovement = () => {
           {/* Active Feature */}
           <div className="group">
             <Button 
-              onClick={() => setStep(1)} 
+              onClick={() => {
+                console.log("Resume Improvement button clicked");
+                handleStepNavigation(1);
+              }} 
               className="w-full bg-gradient-to-r from-primary-600 to-primary-500 text-white px-6 py-4 rounded-lg flex items-center justify-between hover:from-primary-700 hover:to-primary-600 shadow-md hover:shadow-lg transition-all"
             >
               <div className="flex flex-col items-start">
@@ -805,6 +466,7 @@ const ResumeImprovement = () => {
             <button
               key={index}
               onClick={() => {
+                // Use context functions instead of direct state setters
                 setCurrentJobIndex(index);
                 setCurrentBulletIndex(0);
               }}
@@ -848,7 +510,7 @@ const ResumeImprovement = () => {
         {currentJob.achievements.map((_, index) => (
           <button
             key={index}
-            onClick={() => setCurrentBulletIndex(index)}
+            onClick={() => setCurrentBulletIndex(index)} // Using context function
             className={`
               w-8 h-8 rounded-full flex items-center justify-center text-sm
               transition-colors duration-200
@@ -879,7 +541,7 @@ const ResumeImprovement = () => {
             Please try uploading again or use a different file format.
           </p>
           <Button 
-            onClick={() => setStep(0)} 
+            onClick={() => handleStepNavigation(0)} 
             variant="primary"
             className="mt-4"
           >
@@ -1223,7 +885,7 @@ const ResumeImprovement = () => {
                     {/* Always keep the manual button as a fallback */}
                     {!improvements[bulletId] && !loading.improve && (
                       <Button 
-                        onClick={handleBulletPointImprovement} 
+                        onClick={triggerBulletImprovement} 
                         variant="primary"
                         className="mt-4"
                       >
@@ -1249,20 +911,16 @@ const ResumeImprovement = () => {
                           </h3>
                           <Button
                             onClick={() => {
-                              // Clear existing improvements first
-                              const currentBullet = getCurrentBulletPoint();
-                              if (currentBullet && currentJobIndex !== null && currentBulletIndex !== null) {
-                                const currentJob = resumeData.bullet_points[currentJobIndex];
-                                // Remove from improvements to trigger regeneration
-                                setImprovements(prev => {
-                                  const newImprovements = {...prev};
-                                  delete newImprovements[bulletId];
-                                  return newImprovements;
-                                });
-                                // Set loading state
-                                setLoading(prev => ({...prev, improve: true}));
+                              // Clear existing improvements and regenerate them
+                              if (currentJobIndex !== null && currentBulletIndex !== null) {
+                                // Use context functions directly
+                                startOperation('improve');
+                                
+                                // Use update improvement from context to remove the current bullet
+                                updateImprovement(bulletId, null);
+                                
                                 // Trigger generation after a short delay to ensure state is updated
-                                setTimeout(() => handleBulletPointImprovement(), 100);
+                                setTimeout(() => triggerBulletImprovement(), 100);
                               }
                             }}
                             variant="outline"
@@ -1290,15 +948,12 @@ const ResumeImprovement = () => {
                                     }
                                   `}
                                   onClick={() => {
-                                    // Update selected variation and the current editing text
-                                    const updatedImprovements = {...improvements};
-                                    updatedImprovements[bulletId] = {
-                                      ...updatedImprovements[bulletId],
+                                    // Use updateImprovement from context
+                                    updateImprovement(bulletId, {
                                       selectedVariation: index,
                                       currentlyEditing: suggestion,
                                       improvedBulletPoint: suggestion // Update the main improvedBulletPoint as well
-                                    };
-                                    setImprovements(updatedImprovements);
+                                    });
                                   }}
                                 >
                                   <div className="flex items-start">
@@ -1358,13 +1013,11 @@ const ResumeImprovement = () => {
                           <Textarea
                             value={improvements[bulletId]?.currentlyEditing || improvements[bulletId]?.improvedBulletPoint || ""}
                             onChange={(e) => {
-                              const updatedImprovements = {...improvements};
-                              updatedImprovements[bulletId] = {
-                                ...updatedImprovements[bulletId],
+                              // Use updateImprovement from context
+                              updateImprovement(bulletId, {
                                 currentlyEditing: e.target.value,
                                 improvedBulletPoint: e.target.value // Update the main improved bullet point as well
-                              };
-                              setImprovements(updatedImprovements);
+                              });
                             }}
                             rows={3}
                             className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 focus:border-green-300 dark:focus:border-green-700"
@@ -1374,29 +1027,23 @@ const ResumeImprovement = () => {
                         <div className="flex flex-wrap gap-3">
                           <Button
                             onClick={() => {
-                              // Update the resume data with the improved bullet point
-                              const updatedJobs = [...resumeData.bullet_points];
-                              updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
-                              setResumeData({...resumeData, bullet_points: updatedJobs});
+                              // Use context function to save bullet point
+                              const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
                               
-                              // Mark this bullet as saved
-                              setSavedBullets({
-                                ...savedBullets, 
-                                [bulletId]: true
-                              });
-
-                              // Show a temporary success message
-                              const tempMessage = document.createElement('div');
-                              tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
-                              tempMessage.innerHTML = 'Bullet point updated successfully!';
-                              document.getElementById('save-button-container').appendChild(tempMessage);
-                              
-                              // Remove the message after 3 seconds
-                              setTimeout(() => {
-                                if (tempMessage.parentNode) {
-                                  tempMessage.parentNode.removeChild(tempMessage);
-                                }
-                              }, 3000);
+                              if (success) {
+                                // Show a temporary success message
+                                const tempMessage = document.createElement('div');
+                                tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
+                                tempMessage.innerHTML = 'Bullet point updated successfully!';
+                                document.getElementById('save-button-container').appendChild(tempMessage);
+                                
+                                // Remove the message after 3 seconds
+                                setTimeout(() => {
+                                  if (tempMessage.parentNode) {
+                                    tempMessage.parentNode.removeChild(tempMessage);
+                                  }
+                                }, 3000);
+                              }
                             }}
                             variant="secondary"
                             className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
@@ -1407,19 +1054,13 @@ const ResumeImprovement = () => {
                           
                           <Button
                             onClick={() => {
-                              // Save the current bullet point
-                              const updatedJobs = [...resumeData.bullet_points];
-                              updatedJobs[currentJobIndex].achievements[currentBulletIndex] = improvements[bulletId].improvedBulletPoint;
-                              setResumeData({...resumeData, bullet_points: updatedJobs});
+                              // Use context function to save bullet point
+                              const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
                               
-                              // Mark this bullet as saved
-                              setSavedBullets({
-                                ...savedBullets, 
-                                [bulletId]: true
-                              });
-                              
-                              // Navigate to next bullet point
-                              navigateBulletPoints('next');
+                              if (success) {
+                                // Navigate to next bullet point using context function
+                                navigateBulletPoints('next');
+                              }
                             }}
                             variant="primary"
                             className="bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-600 text-white"
@@ -1843,7 +1484,7 @@ const ResumeImprovement = () => {
             <Button 
               onClick={() => {
                 window.scrollTo(0, 0);
-                setStep(3.75);
+                handleStepNavigation(3.75);
               }} 
               variant="primary"
               className="w-full"
@@ -1922,7 +1563,7 @@ const ResumeImprovement = () => {
                   });
                 });
                 
-                exportResume(flatBullets);
+                handleExportResume();
               }}
               variant="primary"
               size="lg"
@@ -1938,33 +1579,52 @@ const ResumeImprovement = () => {
     );
   };
 
-  // Functions for editing job details
+  // These functions use local state with context update for persistence
+  // Start editing a job with local state
   const startEditingJob = (jobIndex) => {
+    // Update local state
     setEditingJobIndex(jobIndex);
     setEditingJob({...resumeData.bullet_points[jobIndex]});
   };
   
   const saveEditedJob = () => {
     if (editingJob && editingJobIndex !== null) {
+      // Update the resume data directly with our local state
       const updatedJobs = [...resumeData.bullet_points];
       updatedJobs[editingJobIndex] = editingJob;
+      
+      // Use context method to update the data
       setResumeData({...resumeData, bullet_points: updatedJobs});
+      
+      // Set resume as edited for re-analysis
+      setResumeEdited(true);
+      
+      // Clear local state
       setEditingJobIndex(null);
       setEditingJob(null);
     }
   };
   
-  // Functions for editing bullet points
+  // Functions for editing bullet points with local state
   const startEditingBullet = (jobIndex, bulletIndex, bulletText) => {
+    // Update local state
     setEditingBulletInfo({ jobIndex, bulletIndex });
     setEditedBullet(bulletText);
   };
   
   const saveEditedBullet = () => {
     if (editingBulletInfo.jobIndex !== null && editingBulletInfo.bulletIndex !== null) {
+      // Update the resume data directly
       const updatedJobs = [...resumeData.bullet_points];
       updatedJobs[editingBulletInfo.jobIndex].achievements[editingBulletInfo.bulletIndex] = editedBullet;
+      
+      // Use context method to update the data
       setResumeData({...resumeData, bullet_points: updatedJobs});
+      
+      // Set resume as edited for re-analysis
+      setResumeEdited(true);
+      
+      // Clear local state
       setEditingBulletInfo({ jobIndex: null, bulletIndex: null });
       setEditedBullet("");
     }
@@ -2167,7 +1827,7 @@ const ResumeImprovement = () => {
           <Button 
             onClick={() => {
               window.scrollTo(0, 0);
-              setStep(2.5);
+              handleStepNavigation(2.5);
             }} 
             variant="primary"
             className="w-full"
@@ -2180,24 +1840,7 @@ const ResumeImprovement = () => {
     );
   };
   
-  // Function to get resume analysis from AI when moving to analysis page
-  const getResumeAnalysis = async () => {
-    // Don't run analysis if we already have it, unless forceRefresh is true
-    if (!resumeAnalysis) {
-      try {
-        console.log("Starting resume analysis on analysis page...");
-        const analysis = await analyzeResume(resumeData);
-        if (analysis) {
-          setResumeAnalysis(analysis);
-          console.log("Analysis completed successfully");
-        }
-      } catch (error) {
-        console.error("Error getting resume analysis:", error);
-      }
-    } else {
-      console.log("Using existing resume analysis data");
-    }
-  };
+  // Using context's getResumeAnalysis function
 
   // Effect to trigger analysis when reaching the analysis step
   React.useEffect(() => {
@@ -2449,7 +2092,7 @@ const ResumeImprovement = () => {
                 You can try again or continue to the bullet improvement section manually.
               </p>
               <Button 
-                onClick={getResumeAnalysis} 
+                onClick={() => getResumeAnalysis()} 
                 variant="primary"
                 className="w-full md:w-auto"
               >
@@ -2495,7 +2138,7 @@ const ResumeImprovement = () => {
                 Get insights about your strengths, improvement areas, missing skills, and industry fit.
               </p>
               <Button 
-                onClick={getResumeAnalysis} 
+                onClick={() => getResumeAnalysis()} 
                 variant="primary"
                 size="lg"
               >
@@ -2812,8 +2455,9 @@ const ResumeImprovement = () => {
             <Button 
               onClick={() => {
                 window.scrollTo(0, 0);
-                setStep(3);
-                // Initialize selection to first bullet if needed
+                handleStepNavigation(3);
+                // Initialize selection to first bullet if needed - this is also handled in the context
+                // But we'll keep it here for redundancy
                 if (currentJobIndex === null || currentBulletIndex === null) {
                   const jobs = resumeData.bullet_points;
                   if (jobs.length > 0) {
@@ -2957,7 +2601,7 @@ const ResumeImprovement = () => {
                 <span className="font-medium mb-1 text-gray-900 dark:text-white">Choose a file</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 mb-1">PDF, DOC, DOCX or TXT files supported</span>
                 <span className="text-xs text-gray-400 dark:text-gray-500">Max file size: 5MB</span>
-                <input type="file" className="hidden" onChange={handleFileUpload} accept=".pdf,.txt,.doc,.docx" aria-label="Upload resume file" />
+                <input type="file" className="hidden" onChange={onFileInputChange} accept=".pdf,.txt,.doc,.docx" aria-label="Upload resume file" />
               </label>
               
               {errors.parse && (
@@ -3008,11 +2652,11 @@ const ResumeImprovement = () => {
             saveNewSkillBullet={saveNewSkillBullet}
             onNext={() => {
               window.scrollTo(0, 0);
-              setStep(4);
+              handleStepNavigation(4);
             }}
             onBack={() => {
               window.scrollTo(0, 0);
-              setStep(3.5);
+              handleStepNavigation(3.5);
             }}
           />
         );
@@ -3142,7 +2786,7 @@ const ResumeImprovement = () => {
             <StepNavigation 
               currentStep={step} 
               steps={navigationSteps.slice(1)} // Skip feature selection step in nav
-              onStepClick={handleStepNavigation}
+              onStepClick={step => handleStepNavigation(step)}
               disabled={disabledSteps()}
               isStepCompleted={isStepCompleted}
             />
@@ -3175,7 +2819,10 @@ const ResumeImprovement = () => {
       
       <ConfirmationModal 
         isOpen={showConfirmModal}
-        onConfirm={handleConfirmReset}
+        onConfirm={() => {
+          clearStorageAndResetState();
+          setShowConfirmModal(false);
+        }}
         onCancel={() => setShowConfirmModal(false)}
       />
     </div>
