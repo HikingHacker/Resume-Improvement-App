@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/Resume-Improvement-App/static/css/main.f2e88c2a.css",
+    "main.js": "/Resume-Improvement-App/static/js/main.ac4c9df7.js",
+    "static/js/453.3148ebe5.chunk.js": "/Resume-Improvement-App/static/js/453.3148ebe5.chunk.js",
+    "index.html": "/Resume-Improvement-App/index.html",
+    "main.f2e88c2a.css.map": "/Resume-Improvement-App/static/css/main.f2e88c2a.css.map",
+    "main.ac4c9df7.js.map": "/Resume-Improvement-App/static/js/main.ac4c9df7.js.map",
+    "453.3148ebe5.chunk.js.map": "/Resume-Improvement-App/static/js/453.3148ebe5.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.f2e88c2a.css",
+    "static/js/main.ac4c9df7.js"
+  ]
+}
