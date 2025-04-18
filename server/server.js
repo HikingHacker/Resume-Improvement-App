@@ -37,9 +37,49 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10 MB limit
 });
 
-// Setup middleware
-app.use(cors());
+// Setup middleware with CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://hikinghacker.github.io',
+    'https://HikingHacker.github.io'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Add global middleware to ensure CORS headers on all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  // Check if the origin is in our allowed list
+  if (corsOptions.origin.indexOf(origin) !== -1) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // Allow localhost during development
+    if (origin && origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else {
+      res.header('Access-Control-Allow-Origin', 'https://hikinghacker.github.io');
+    }
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// Add a specific OPTIONS handler for CORS preflight requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://hikinghacker.github.io');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(204).send();
+});
 
 // Claude API configuration
 const CLAUDE_CONFIG = {
@@ -163,7 +203,21 @@ async function improveBulletPoint(bulletPoint, additionalContext = '') {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'Server is running' });
+  res.json({ 
+    status: 'Server is running',
+    corsEnabled: true,
+    allowedOrigins: corsOptions.origin 
+  });
+});
+
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'CORS is properly configured',
+    receivedOrigin: req.headers.origin || 'No origin header received',
+    corsEnabled: true
+  });
 });
 
 // Simple test endpoint that doesn't require file upload
