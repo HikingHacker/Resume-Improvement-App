@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./resume-improvement-app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,15 +23,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: './resume-improvement-app/package-lock.json'
       
       - name: Install dependencies
         run: npm ci
       
       - name: Build
         run: npm run build
+        env:
+          CI: false
+      
+      - name: Create nojekyll
+        run: touch build/.nojekyll
       
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: build
+          folder: resume-improvement-app/build
           branch: gh-pages
