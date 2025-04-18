@@ -287,8 +287,9 @@ export function ResumeProvider({ children }) {
       // Start background analysis
       resumeService.setLoading(prev => ({ ...prev, analyze: true }));
       
-      // Define structuredData variable if it's not already defined
-      const dataToAnalyze = result.parsedData || (typeof structuredData !== 'undefined' ? structuredData : null);
+      // Use the structured data created earlier or the parsed data
+      const structuredData = result.parsedData ? null : createStructuredDataFromFlatBullets(result.bulletPoints || []);
+      const dataToAnalyze = result.parsedData || structuredData;
       resumeService.analyzeResume(dataToAnalyze)
         .then(analysis => {
           if (analysis) {
