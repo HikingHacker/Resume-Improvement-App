@@ -310,7 +310,7 @@ export function ResumeProvider({ children }) {
   }, [resumeService, getBulletId, actions]);
 
   // Helper function to convert flat bullet points to structured format
-  const createStructuredDataFromFlatBullets = useCallback((flatBullets) => {
+  const createStructuredDataFromFlatBullets = (flatBullets) => {
     const structuredData = { bullet_points: [] };
     let currentJob = null;
     
@@ -369,7 +369,7 @@ export function ResumeProvider({ children }) {
     }
     
     return structuredData;
-  }, []);
+  };
 
   // Function to get bullet point improvements
   const handleBulletPointImprovement = useCallback(async () => {
@@ -521,9 +521,29 @@ export function ResumeProvider({ children }) {
   }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex]);
 
   // Function to reset the state
-  const resetState = useCallback(() => {
+  const resetStateInternal = useCallback(() => {
     dispatch({ type: ActionTypes.RESET_STATE });
-  }, []);
+  }, [dispatch]);
+
+  // Function to get resume analysis
+  const getResumeAnalysis = useCallback(async () => {
+    // Don't run analysis if we already have it, unless resumeEdited is true
+    if (!state.resumeAnalysis || state.resumeEdited) {
+      try {
+        const analysis = await resumeService.analyzeResume(state.resumeData);
+        if (analysis) {
+          dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis });
+          
+          // Reset the edited flag after triggering a re-analysis
+          if (state.resumeEdited) {
+            dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: false });
+          }
+        }
+      } catch (error) {
+        console.error("Error getting resume analysis:", error);
+      }
+    }
+  }, [state.resumeAnalysis, state.resumeEdited, state.resumeData, resumeService, dispatch]);
 
   // Function to handle step navigation
   const handleStepNavigation = useCallback((newStep) => {
@@ -559,27 +579,8 @@ export function ResumeProvider({ children }) {
 
     console.log("Navigating to step:", newStep);
     dispatch({ type: ActionTypes.SET_STEP, payload: newStep });
-  }, [state.step, state.resumeData, state.resumeAnalysis]);
+  }, [state.step, state.resumeData, state.resumeAnalysis, getResumeAnalysis, dispatch]);
 
-  // Function to get resume analysis
-  const getResumeAnalysis = useCallback(async () => {
-    // Don't run analysis if we already have it, unless resumeEdited is true
-    if (!state.resumeAnalysis || state.resumeEdited) {
-      try {
-        const analysis = await resumeService.analyzeResume(state.resumeData);
-        if (analysis) {
-          dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis });
-          
-          // Reset the edited flag after triggering a re-analysis
-          if (state.resumeEdited) {
-            dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: false });
-          }
-        }
-      } catch (error) {
-        console.error("Error getting resume analysis:", error);
-      }
-    }
-  }, [state.resumeAnalysis, state.resumeEdited, state.resumeData, resumeService]);
 
   // Navigation functions
   const handleNavigation = useCallback((direction) => {
@@ -810,11 +811,11 @@ export function ResumeProvider({ children }) {
       });
       
       // Reset state
-      actions.resetState();
+      resetStateInternal();
     } catch (error) {
       console.error('Error clearing localStorage:', error);
     }
-  }, [actions]);
+  }, [resetStateInternal]);
 
   // Organize context value into logical sections
   const value = {

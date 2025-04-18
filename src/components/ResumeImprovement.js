@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, Sun, Moon, CheckCircle, X, Info, Sparkles, ClipboardList, LineChart, Zap, Layers, RotateCcw } from 'lucide-react';
+import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, CheckCircle, Info, Sparkles, ClipboardList, LineChart, Zap, Layers } from 'lucide-react';
 import { 
   Button, 
   Input, 
@@ -119,7 +119,7 @@ const ResumeImprovement = () => {
   const [editedBullet, setEditedBullet] = React.useState("");
 
   // Function to fetch AI-powered analytics and recommendations
-  const getAnalytics = async () => {
+  const getAnalytics = React.useCallback(async () => {
     try {
       // Use context startOperation method instead of direct setLoading
       startOperation("analytics");
@@ -144,7 +144,7 @@ const ResumeImprovement = () => {
       // Use context endOperation method instead of direct setLoading
       endOperation("analytics");
     }
-  };
+  }, [startOperation, getImprovementAnalytics, resumeData, improvements, savedBullets, setErrors, endOperation]);
   
   // Add a new UI action for clearing storage and resetting state
   const handleClearStorage = () => {
@@ -1860,7 +1860,7 @@ const ResumeImprovement = () => {
     if (step === 3.5 && !aiRecommendations) {
       getAnalytics();
     }
-  }, [step, resumeAnalysis, resumeEdited, resumeData, aiRecommendations]);
+  }, [step, resumeAnalysis, resumeEdited, resumeData, aiRecommendations, getAnalytics, getResumeAnalysis, setResumeEdited]);
   
 
   // New function to render the resume analysis screen
@@ -2749,7 +2749,7 @@ const ResumeImprovement = () => {
     );
   };
 
-  const { theme } = useTheme();
+  useTheme(); // We need the theme context but don't use its properties
 
   // Determine which steps should be disabled
   const disabledSteps = () => {
