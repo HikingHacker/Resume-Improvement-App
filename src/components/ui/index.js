@@ -8,6 +8,8 @@ export { default as Textarea } from './atoms/Textarea';
 export { default as Skeleton, SkeletonText, SkeletonAvatar, SkeletonButton } from './atoms/Skeleton';
 export { default as Badge } from './atoms/Badge';
 export { default as Tooltip } from './atoms/Tooltip';
+export { default as ResetButton } from './atoms/ResetButton';
+export { default as FixedResetButton } from './atoms/FixedResetButton';
 
 // Molecules - Combinations of atoms
 export { default as Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './molecules/Card';

@@ -14,7 +14,7 @@ import {
   TableRow, 
   TableHead, 
   TableCell,
-  Textarea 
+  Textarea
 } from '../ui';
 
 const AddMissingSkills = ({ 
@@ -27,6 +27,7 @@ const AddMissingSkills = ({
   selectedSkill, 
   setSelectedSkill,
   newSkillBullets, 
+  setNewSkillBullets,
   generateSkillBullet,
   generatingSkillBullet,
   saveNewSkillBullet,

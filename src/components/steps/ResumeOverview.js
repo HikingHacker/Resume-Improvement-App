@@ -5,16 +5,18 @@ import {
   CardHeader, 
   CardTitle, 
   CardContent,
+  CardFooter,
   Button,
   Input
 } from '../ui';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useResumeContext } from '../../contexts/ResumeContext';
 
 /**
  * Resume Overview component
  * Displays the parsed resume data and allows the user to edit job details
  */
-const ResumeOverview = () => {
+const ResumeOverview = ({ onBack, onNext }) => {
   const {
     resumeData,
     loading,
@@ -203,30 +205,28 @@ const ResumeOverview = () => {
           </div>
         </div>
         
-        <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            After reviewing and correcting your resume data, continue to view your resume analysis or go back to upload a different file.
-            {resumeAnalysis && (
-              <span className="block mt-2 text-green-600 dark:text-green-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="inline-block w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Your analysis is ready to view!
-              </span>
-            )}
-          </p>
-          <Button 
-            onClick={() => {
-              window.scrollTo(0, 50);
-              setStep(2.5);
-            }} 
-            variant="primary"
-            className="w-full"
-          >
-            {resumeAnalysis ? "View Your Resume Analysis" : "Continue to Resume Analysis"}
-          </Button>
-        </div>
       </CardContent>
+      
+      <CardFooter className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
+        <Button 
+          onClick={onBack}
+          variant="outline"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Resume Upload
+        </Button>
+        
+        <Button 
+          onClick={() => {
+            window.scrollTo(0, 50);
+            setStep(2.5);
+          }}
+          variant="primary"
+        >
+          {resumeAnalysis ? "View Resume Analysis" : "Continue to Analysis"}
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+      </CardFooter>
     </Card>
   );
 };

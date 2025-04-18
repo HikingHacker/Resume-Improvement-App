@@ -1,6 +1,6 @@
 import React from 'react';
-import { Upload } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui';
+import { Upload, ArrowLeft } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Button } from '../ui';
 
 /**
  * Resume upload component
@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui
  * @param {boolean} props.loading - Whether upload is in progress
  * @param {string} props.error - Error message if upload failed
  */
-const ResumeUpload = ({ onFileUpload, loading, error }) => {
+const ResumeUpload = ({ onFileUpload, loading, error, onBack, onNext }) => {
   return (
     <Card className="w-full shadow-md dark:bg-gray-800">
       <CardHeader>
@@ -125,6 +125,21 @@ const ResumeUpload = ({ onFileUpload, loading, error }) => {
         <p>Your privacy is important to us. Files are processed securely and not stored permanently.</p>
       </div>
       </CardContent>
+      
+      <CardFooter className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+        <Button 
+          onClick={onBack}
+          variant="outline"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Features
+        </Button>
+        
+        <div className="invisible">
+          {/* This empty div helps with spacing */}
+          <Button variant="outline">Placeholder</Button>
+        </div>
+      </CardFooter>
     </Card>
   );
 };

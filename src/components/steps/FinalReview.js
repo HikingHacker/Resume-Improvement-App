@@ -1,11 +1,12 @@
 import React from 'react';
-import { Download, CheckCircle } from 'lucide-react';
+import { Download, CheckCircle, ArrowLeft } from 'lucide-react';
 import { 
   Card, 
   CardHeader, 
   CardTitle, 
   CardDescription, 
   CardContent,
+  CardFooter,
   Table, 
   TableHeader, 
   TableBody, 
@@ -20,7 +21,7 @@ import { useResumeContext } from '../../contexts/ResumeContext';
  * Final Review component
  * Displays all improved bullet points for final review before export
  */
-const FinalReview = () => {
+const FinalReview = ({ onBack }) => {
   const {
     resumeData,
     improvements,
@@ -91,6 +92,21 @@ const FinalReview = () => {
           </Button>
         </div>
       </CardContent>
+      
+      <CardFooter className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+        <Button 
+          onClick={onBack}
+          variant="outline"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Missing Skills
+        </Button>
+        
+        <div className="invisible">
+          {/* This empty div helps with spacing */}
+          <Button variant="outline">Placeholder</Button>
+        </div>
+      </CardFooter>
     </Card>
   );
 };

@@ -80,6 +80,7 @@ const FeatureSelection = ({ onSelect }) => {
           </button>
         </div>
       </CardContent>
+      
     </Card>
   );
 };
