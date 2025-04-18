@@ -28,7 +28,9 @@
     "eject": "react-scripts eject",
     "lint": "eslint src/**/*.js",
     "server": "cd server && npm run dev",
-    "dev": "concurrently \"npm start\" \"npm run server\""
+    "dev": "concurrently \"npm start\" \"npm run server\"",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
@@ -52,5 +54,7 @@
     "autoprefixer": "^10.4.17",
     "concurrently": "^9.1.2",
     "postcss": "^8.4.38"
-  }
+  },
+
+  "homepage": "https://yourusername.github.io/resume-improvement-tool"
 }
