@@ -287,7 +287,8 @@ export function ResumeProvider({ children }) {
       // Start background analysis
       resumeService.setLoading(prev => ({ ...prev, analyze: true }));
       
-      const dataToAnalyze = result.parsedData || structuredData;
+      // Define structuredData variable if it's not already defined
+      const dataToAnalyze = result.parsedData || (typeof structuredData !== 'undefined' ? structuredData : null);
       resumeService.analyzeResume(dataToAnalyze)
         .then(analysis => {
           if (analysis) {
