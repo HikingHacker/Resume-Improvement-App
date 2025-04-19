@@ -2776,7 +2776,7 @@ const ResumeImprovement = () => {
             Resume Improvement Assistant
           </h1>
           <p className="text-gray-600 dark:text-gray-300 mb-4 mx-auto max-w-2xl transition-colors">
-            Enhance your resume with AI-powered insights and improvements
+            Don’t just apply—headline the show.
           </p>
         </div>
         

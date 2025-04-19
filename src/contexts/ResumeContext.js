@@ -525,8 +525,14 @@ export function ResumeProvider({ children }) {
     dispatch({ type: ActionTypes.RESET_STATE });
   }, [dispatch]);
 
-  // Function to get resume analysis
+  // Function to get resume analysis - with flag to prevent multiple calls
   const getResumeAnalysis = useCallback(async () => {
+    // Use loading state to prevent duplicate requests
+    if (resumeService.loading.analyze) {
+      console.log("Analysis already in progress, skipping duplicate request");
+      return;
+    }
+    
     // Don't run analysis if we already have it, unless resumeEdited is true
     if (!state.resumeAnalysis || state.resumeEdited) {
       try {
@@ -555,8 +561,9 @@ export function ResumeProvider({ children }) {
       return;
     }
 
-    if (newStep === 2.5 && !state.resumeAnalysis) {
+    if (newStep === 2.5 && (!state.resumeAnalysis || state.resumeEdited)) {
       // Trigger analysis when navigating directly to analysis step
+      // Only if we don't already have an analysis or if the resume was edited
       getResumeAnalysis();
     }
 

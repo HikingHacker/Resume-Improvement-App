@@ -113,6 +113,6 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
 
-temp text test test
+ Redeploy the GH Pages with: "npx gh-pages -d build -r git@github.com:HikingHacker/Resume-Improvement-App.git"
 
- test tes test test tes test
+ Push to Heroku with "git push heroku main"
