@@ -1,20 +1,14 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import multer from 'multer';
-import fetch from 'node-fetch';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import fs from 'fs';
-import path from 'path';
-import { parsePDF } from './pdfHelper.js';
-
-// Get the directory name
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const multer = require('multer');
+const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
+const { parsePDF } = require('./pdfHelper');
 
 // Import resume parsing utilities
-const resumeParser = await import('./resumeParser.js');
+const resumeParser = require('./resumeParser');
 const { processBulletPointResponse, RESUME_SYSTEM_PROMPT } = resumeParser;
 
 // Initialize environment variables

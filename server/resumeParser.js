@@ -282,7 +282,7 @@ Return ONLY a JSON object with the following structure:
 Do not include any explanations, summaries, or additional text outside of the JSON response.
 `;
 
-export {
+module.exports = {
   extractBulletPointsFromText,
   processBulletPointResponse,
   RESUME_SYSTEM_PROMPT

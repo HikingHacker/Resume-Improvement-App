@@ -3,12 +3,8 @@
  * This file provides a wrapper around pdf-parse to avoid its test file issues
  */
 
-import fs from 'fs';
-import path from 'path';
-import { createRequire } from 'module';
-
-// Create a Node.js require function
-const require = createRequire(import.meta.url);
+const fs = require('fs');
+const path = require('path');
 
 // Create a PDF parsing function that doesn't rely on the problematic index.js
 // Main PDF parsing function
@@ -74,4 +70,4 @@ const parsePDF = async (dataBuffer) => {
   }
 };
 
-export { parsePDF };
+module.exports = { parsePDF };
