@@ -39,7 +39,7 @@ const corsOptions = {
     'https://HikingHacker.github.io'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
   credentials: true
 };
 
@@ -61,7 +61,7 @@ app.use((req, res, next) => {
     }
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID');
   res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
@@ -70,7 +70,7 @@ app.use((req, res, next) => {
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', 'https://hikinghacker.github.io');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-ID');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.status(204).send();
 });
@@ -86,14 +86,15 @@ const CLAUDE_CONFIG = {
 };
 
 /**
- * Makes a request to Claude API
+ * Makes a request to Claude API with proper error handling, backoff, and status tracking
  */
 async function callClaudeAPI(options) {
   const { 
     prompt, 
     systemPrompt,
     maxTokens = CLAUDE_CONFIG.maxTokens,
-    temperature = CLAUDE_CONFIG.temperature 
+    temperature = CLAUDE_CONFIG.temperature,
+    requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   } = options;
 
   if (!CLAUDE_CONFIG.apiKey) {
@@ -101,38 +102,221 @@ async function callClaudeAPI(options) {
     throw new Error('Claude API key is not configured.');
   }
 
+  // Create a record for this request in our tracking system
+  let requestStatus = {
+    id: requestId,
+    status: 'pending',
+    progress: 0,
+    startTime: Date.now(),
+    lastUpdated: Date.now(),
+    retryCount: 0,
+    error: null
+  };
+  
+  // Store the request status (in-memory for simple implementation)
+  requestStatusMap.set(requestId, requestStatus);
+
+  // Retry configuration
+  const MAX_RETRIES = 3;
+  const BASE_DELAY = 1000; // 1 second
+  const MAX_DELAY = 15000; // 15 seconds
+
   try {
-    const response = await fetch(`${CLAUDE_CONFIG.baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_CONFIG.apiKey,
-        'anthropic-version': CLAUDE_CONFIG.apiVersion,
-      },
-      body: JSON.stringify({
-        model: CLAUDE_CONFIG.model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      }),
-    });
+    let attempt = 0;
+    
+    while (attempt <= MAX_RETRIES) {
+      try {
+        // Update request status
+        updateRequestStatus(requestId, {
+          status: attempt > 0 ? 'retrying' : 'in_progress',
+          progress: 25,
+          retryCount: attempt,
+          lastUpdated: Date.now()
+        });
+        
+        // Log the attempt
+        if (attempt > 0) {
+          console.log(`[${requestId}] Retry attempt ${attempt}/${MAX_RETRIES}`);
+        }
+        
+        // Make the API call
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+        
+        const response = await fetch(`${CLAUDE_CONFIG.baseUrl}/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': CLAUDE_CONFIG.apiKey,
+            'anthropic-version': CLAUDE_CONFIG.apiVersion,
+          },
+          body: JSON.stringify({
+            model: CLAUDE_CONFIG.model,
+            max_tokens: maxTokens,
+            temperature: temperature,
+            system: systemPrompt,
+            messages: [
+              { role: 'user', content: prompt }
+            ]
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Update request status
+        updateRequestStatus(requestId, {
+          progress: 50,
+          lastUpdated: Date.now()
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Claude API error:', errorText);
-      throw new Error(`Claude API returned error: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[${requestId}] Claude API error:`, errorText);
+          
+          // Handle different error types with specific retry logic
+          const status = response.status;
+          
+          // Don't retry certain errors
+          if (status === 400 || status === 401 || status === 403) {
+            throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+          }
+          
+          // For server errors and rate limits, retry with backoff
+          if (status >= 500 || status === 429) {
+            // Get retry delay from headers if available, or use exponential backoff
+            let retryAfter = response.headers.get('retry-after');
+            let delay;
+            
+            if (retryAfter) {
+              delay = parseInt(retryAfter, 10) * 1000; // Convert to ms
+            } else {
+              // Exponential backoff with jitter
+              const jitter = Math.random() * 300;
+              delay = Math.min(BASE_DELAY * Math.pow(2, attempt) + jitter, MAX_DELAY);
+            }
+            
+            console.log(`[${requestId}] Retrying after ${delay}ms...`);
+            
+            updateRequestStatus(requestId, {
+              status: 'waiting_to_retry',
+              error: `${status} ${response.statusText}`,
+              lastUpdated: Date.now()
+            });
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempt++;
+            continue;
+          }
+          
+          throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+        }
+
+        // Update request status
+        updateRequestStatus(requestId, {
+          progress: 75,
+          lastUpdated: Date.now()
+        });
+
+        const data = await response.json();
+        
+        // Request succeeded
+        updateRequestStatus(requestId, {
+          status: 'completed',
+          progress: 100,
+          lastUpdated: Date.now()
+        });
+        
+        return data.content[0].text;
+      } catch (error) {
+        // If this is an abort error, it's a timeout
+        if (error.name === 'AbortError') {
+          console.error(`[${requestId}] Request timed out`);
+          updateRequestStatus(requestId, {
+            status: 'timeout',
+            error: 'Request timed out',
+            lastUpdated: Date.now()
+          });
+        }
+        
+        // If we've used all retries, or if it's not a retryable error, throw
+        if (attempt >= MAX_RETRIES || !isRetryableError(error)) {
+          updateRequestStatus(requestId, {
+            status: 'failed',
+            error: error.message,
+            lastUpdated: Date.now()
+          });
+          throw error;
+        }
+        
+        // Calculate backoff time with jitter
+        const jitter = Math.random() * 300;
+        const delay = Math.min(BASE_DELAY * Math.pow(2, attempt) + jitter, MAX_DELAY);
+        
+        console.log(`[${requestId}] Request failed, retrying after ${delay}ms...`);
+        console.error(`[${requestId}] Error:`, error);
+        
+        updateRequestStatus(requestId, {
+          status: 'waiting_to_retry',
+          error: error.message,
+          lastUpdated: Date.now()
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        attempt++;
+      }
     }
-
-    const data = await response.json();
-    return data.content[0].text;
+    
+    // If we get here, we've exceeded max retries
+    throw new Error(`Failed after ${MAX_RETRIES} retry attempts`);
   } catch (error) {
-    console.error('Error calling Claude API:', error);
+    console.error(`[${requestId}] Final error calling Claude API:`, error);
+    
+    // Update the request status one final time
+    updateRequestStatus(requestId, {
+      status: 'failed',
+      error: error.message,
+      lastUpdated: Date.now()
+    });
+    
     throw new Error('Failed to get response from Claude. Please try again later.');
   }
 };
+
+// Request status tracking
+const requestStatusMap = new Map();
+
+/**
+ * Helper to update request status
+ */
+function updateRequestStatus(requestId, updates) {
+  const status = requestStatusMap.get(requestId);
+  if (status) {
+    requestStatusMap.set(requestId, { ...status, ...updates });
+  }
+}
+
+/**
+ * Check if an error is retryable
+ */
+function isRetryableError(error) {
+  // Network errors, timeouts, and 5xx errors are retryable
+  if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+    return true;
+  }
+  
+  // Check for server errors in the message (5xx)
+  if (error.message && error.message.includes('500')) {
+    return true;
+  }
+  
+  // Check for rate limit errors
+  if (error.message && error.message.includes('429')) {
+    return true;
+  }
+  
+  return false;
+}
 
 /**
  * Improves a resume bullet point using Claude AI
@@ -204,6 +388,94 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Status check endpoint for long-running processes
+app.get('/api/request-status/:requestId', (req, res) => {
+  const { requestId } = req.params;
+  
+  if (!requestId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Request ID is required'
+    });
+  }
+  
+  const status = requestStatusMap.get(requestId);
+  
+  if (!status) {
+    return res.status(404).json({
+      success: false,
+      message: 'Request not found'
+    });
+  }
+  
+  // Clean up completed requests that are more than 15 minutes old
+  const now = Date.now();
+  if ((status.status === 'completed' || status.status === 'failed') && 
+      now - status.lastUpdated > 15 * 60 * 1000) {
+    requestStatusMap.delete(requestId);
+  }
+  
+  // Calculate elapsed time
+  const elapsedTime = now - status.startTime;
+  
+  // For completed requests with results, return the results
+  if (status.status === 'completed' && status.result) {
+    return res.json({
+      success: true,
+      requestId,
+      status: status.status,
+      progress: status.progress,
+      elapsedTimeMs: elapsedTime,
+      retryCount: status.retryCount,
+      result: status.result
+    });
+  }
+  
+  // For requests still in progress or failed
+  res.json({
+    success: true,
+    requestId,
+    status: status.status,
+    progress: status.progress,
+    elapsedTimeMs: elapsedTime,
+    retryCount: status.retryCount,
+    error: status.error
+  });
+});
+
+// Result retrieval endpoint for completed requests
+app.get('/api/request-result/:requestId', (req, res) => {
+  const { requestId } = req.params;
+  
+  if (!requestId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Request ID is required'
+    });
+  }
+  
+  const status = requestStatusMap.get(requestId);
+  
+  if (!status) {
+    return res.status(404).json({
+      success: false,
+      message: 'Request not found'
+    });
+  }
+  
+  if (status.status !== 'completed' || !status.result) {
+    return res.status(400).json({
+      success: false,
+      message: `Request is not complete or has no results. Current status: ${status.status}`,
+      status: status.status,
+      progress: status.progress
+    });
+  }
+  
+  // Return just the results
+  res.json(status.result);
+});
+
 // CORS test endpoint
 app.get('/api/cors-test', (req, res) => {
   res.json({
@@ -218,6 +490,10 @@ app.get('/api/cors-test', (req, res) => {
 app.get('/api/v1/resume/parse/simple', async (req, res) => {
   try {
     console.log('Simple test endpoint called');
+    
+    // Create a unique request ID for tracking
+    const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    console.log(`[${requestId}] Starting simple resume parse request`);
     
     // Use a fixed sample resume text
     const resumeText = `
@@ -242,37 +518,77 @@ SKILLS
 JavaScript, React, Node.js, Express, MongoDB, AWS, Docker
 `;
     
-    console.log('Using sample resume text, length:', resumeText.length);
+    console.log(`[${requestId}] Using sample resume text, length:`, resumeText.length);
     
-    // Get response from Claude API with simplified parsing
-    const response = await callClaudeAPI({
-      prompt: resumeText,
-      systemPrompt: RESUME_SYSTEM_PROMPT,
-      temperature: 0.2,
+    // For long-running tasks, immediately return a 202 Accepted response with the request ID
+    res.status(202).json({
+      success: true,
+      message: 'Processing started, check status endpoint for updates',
+      requestId: requestId,
+      statusEndpoint: `/api/request-status/${requestId}`
     });
     
-    // Log a snippet of the response for debugging
-    console.log('Claude response (first 200 chars):', response.substring(0, 200));
-    
-    try {
-      // Process the response to extract bullet points
-      const result = processBulletPointResponse(response);
-      res.json(result);
-    } catch (error) {
-      console.error('Error processing bullet points:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message || 'Failed to process bullet points'
-      });
-    }
+    // Then continue processing asynchronously
+    processParseSampleRequest(requestId, resumeText).catch(error => {
+      console.error(`[${requestId}] Unhandled error in async processing:`, error);
+    });
   } catch (error) {
-    console.error('Error in simple test endpoint:', error);
+    console.error('Error starting simple test endpoint processing:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to process test resume'
     });
   }
 });
+
+/**
+ * Process the resume parse request asynchronously
+ */
+async function processParseSampleRequest(requestId, resumeText) {
+  try {
+    // Get response from Claude API with simplified parsing
+    const response = await callClaudeAPI({
+      prompt: resumeText,
+      systemPrompt: RESUME_SYSTEM_PROMPT,
+      temperature: 0.2,
+      requestId // Pass the request ID for tracking
+    });
+    
+    console.log(`[${requestId}] Claude response received, length:`, response.length);
+    console.log(`[${requestId}] First 200 chars:`, response.substring(0, 200));
+    
+    try {
+      // Process the response to extract bullet points
+      const result = processBulletPointResponse(response);
+      
+      // Store the result with the request for later retrieval
+      updateRequestStatus(requestId, {
+        status: 'completed',
+        progress: 100,
+        result: result,
+        lastUpdated: Date.now()
+      });
+      
+      console.log(`[${requestId}] Processing completed successfully`);
+    } catch (error) {
+      console.error(`[${requestId}] Error processing bullet points:`, error);
+      updateRequestStatus(requestId, {
+        status: 'failed',
+        progress: 75,
+        error: error.message || 'Failed to process bullet points',
+        lastUpdated: Date.now()
+      });
+    }
+  } catch (error) {
+    console.error(`[${requestId}] Error in async processing:`, error);
+    updateRequestStatus(requestId, {
+      status: 'failed',
+      progress: 50,
+      error: error.message || 'Failed to process test resume',
+      lastUpdated: Date.now()
+    });
+  }
+}
 
 // Debug endpoint - echo request data
 app.post('/api/debug', (req, res) => {
@@ -548,8 +864,49 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
       });
     }
     
-    console.log('Resume analysis endpoint called');
-    console.log('Resume data contains', resumeData.bullet_points.length, 'job positions');
+    // Create a unique request ID for tracking
+    const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    console.log(`[${requestId}] Resume analysis endpoint called`);
+    console.log(`[${requestId}] Resume data contains`, resumeData.bullet_points.length, 'job positions');
+    
+    // For long-running tasks, immediately return a 202 Accepted response with the request ID
+    res.status(202).json({
+      success: true,
+      message: 'Analysis started, check status endpoint for updates',
+      requestId: requestId,
+      statusEndpoint: `/api/request-status/${requestId}`
+    });
+    
+    // Process the request asynchronously
+    processResumeAnalysis(requestId, resumeData).catch(error => {
+      console.error(`[${requestId}] Unhandled error in async analysis:`, error);
+    });
+  } catch (error) {
+    console.error('Error starting resume analysis:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to start resume analysis' 
+    });
+  }
+});
+
+/**
+ * Process resume analysis asynchronously
+ */
+async function processResumeAnalysis(requestId, resumeData) {
+  try {
+    // Create initial status
+    const requestStatus = {
+      id: requestId,
+      status: 'preparing',
+      progress: 10,
+      startTime: Date.now(),
+      lastUpdated: Date.now(),
+      error: null
+    };
+    
+    // Store the request status
+    requestStatusMap.set(requestId, requestStatus);
     
     // Prepare the resume data in a format that Claude can analyze
     let formattedResume = '';
@@ -571,8 +928,8 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
       }
     });
     
-    console.log('Formatted resume for analysis, length:', formattedResume.length);
-    console.log('First 200 chars:', formattedResume.substring(0, 200));
+    console.log(`[${requestId}] Formatted resume for analysis, length:`, formattedResume.length);
+    updateRequestStatus(requestId, { status: 'formatted', progress: 20 });
     
     // Define system prompt for resume analysis
     const ANALYSIS_SYSTEM_PROMPT = `
@@ -620,16 +977,22 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
       ${formattedResume}
     `;
     
-    // Call Claude API
-    console.log('Calling Claude API for resume analysis...');
+    // Update status before calling Claude API
+    updateRequestStatus(requestId, { status: 'analyzing', progress: 30 });
+    console.log(`[${requestId}] Calling Claude API for resume analysis...`);
+    
+    // Call Claude API with request ID for tracking
     const response = await callClaudeAPI({
       prompt: analysisPrompt,
       systemPrompt: ANALYSIS_SYSTEM_PROMPT,
       temperature: 0.5,
       maxTokens: 1500, // More tokens for comprehensive analysis
+      requestId // Pass the request ID for tracking
     });
     
-    console.log('Claude response received (first 200 chars):', response.substring(0, 200));
+    // Update status after receiving Claude's response
+    console.log(`[${requestId}] Claude response received, length:`, response.length);
+    updateRequestStatus(requestId, { status: 'processing', progress: 70 });
     
     // Parse the JSON response
     try {
@@ -640,30 +1003,39 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
       }
       
       const analysisResult = JSON.parse(jsonMatch[0]);
-      console.log('Successfully parsed JSON response');
+      console.log(`[${requestId}] Successfully parsed JSON response`);
       
       // Add success flag to the response
       analysisResult.success = true;
       
-      // Return the analysis
-      res.json(analysisResult);
+      // Store the result with the request for later retrieval
+      updateRequestStatus(requestId, {
+        status: 'completed',
+        progress: 100,
+        result: analysisResult,
+        lastUpdated: Date.now()
+      });
+      
+      console.log(`[${requestId}] Analysis completed successfully`);
     } catch (jsonError) {
-      console.error('Error parsing JSON response:', jsonError);
-      console.error('Raw response:', response);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to parse the analysis result',
-        error: jsonError.message
+      console.error(`[${requestId}] Error parsing JSON response:`, jsonError);
+      console.error(`[${requestId}] Raw response:`, response);
+      updateRequestStatus(requestId, {
+        status: 'failed',
+        progress: 80,
+        error: 'Failed to parse the analysis result: ' + jsonError.message,
+        lastUpdated: Date.now()
       });
     }
   } catch (error) {
-    console.error('Error in resume analysis endpoint:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Failed to analyze the resume' 
+    console.error(`[${requestId}] Error in resume analysis:`, error);
+    updateRequestStatus(requestId, {
+      status: 'failed',
+      error: error.message || 'Failed to analyze the resume',
+      lastUpdated: Date.now()
     });
   }
-});
+}
 
 // Endpoint to get AI-powered improvement recommendations
 app.post('/api/v1/resume/improvement-analytics', async (req, res) => {

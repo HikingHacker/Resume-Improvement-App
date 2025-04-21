@@ -24,6 +24,87 @@ const API_CONFIG = {
   useMockData: process.env.REACT_APP_USE_MOCK_DATA === 'true' // Default to real API
 };
 
+// Log the configuration mode during startup
+console.log(`API Configuration: ${API_CONFIG.useMockData ? 'MOCK MODE' : 'REAL API MODE'}`);
+console.log(`API Base URL: ${API_CONFIG.baseUrl}`);
+
+// In-flight request tracking to prevent duplicates (particularly important with React StrictMode)
+const pendingRequests = new Map();
+const completedRequests = new Map();
+
+/**
+ * Generates a deterministic request ID from request parameters
+ * This ensures the same logical request (even if called twice by StrictMode) gets the same ID
+ */
+function generateRequestId(endpoint, method, body) {
+  // Create a stable string representation of the body
+  const bodyStr = body ? JSON.stringify(body) : '';
+  // Create a composite key for the request
+  const requestKey = `${endpoint}|${method}|${bodyStr}`;
+  // Use a hash function for shorter ID (simple implementation)
+  return requestKey;
+}
+
+/**
+ * Check if a request is already in progress or has been completed recently
+ * @returns {Object} status object with inProgress and recentlyCompleted flags
+ */
+function checkRequestStatus(requestId) {
+  const now = Date.now();
+  const inProgress = pendingRequests.has(requestId);
+  
+  // Check if we have a recently completed request (within last 500ms)
+  const recentCompletion = completedRequests.get(requestId);
+  const recentlyCompleted = recentCompletion && (now - recentCompletion.timestamp) < 500;
+  
+  return { inProgress, recentlyCompleted };
+}
+
+/**
+ * Register a request as in-progress
+ */
+function registerPendingRequest(requestId) {
+  pendingRequests.set(requestId, Date.now());
+}
+
+/**
+ * Mark a request as completed
+ * 
+ * @param {string} requestId - The ID of the request
+ * @param {boolean} success - Whether the request completed successfully
+ * @param {Object} result - The result data to cache (optional)
+ */
+function completeRequest(requestId, success = true, result = null) {
+  pendingRequests.delete(requestId);
+  
+  // Store both timestamp and data for successful requests
+  completedRequests.set(requestId, {
+    timestamp: Date.now(),
+    success,
+    data: result?.data || null
+  });
+  
+  // Clean up completed requests older than 2 seconds to prevent memory leaks
+  const now = Date.now();
+  for (const [id, entry] of completedRequests.entries()) {
+    if (now - entry.timestamp > 2000) {
+      completedRequests.delete(id);
+    }
+  }
+}
+
+// Cleanup interval for pendingRequests to prevent memory leaks (abandoned requests)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, timestamp] of pendingRequests.entries()) {
+    // Clean up requests older than 30 seconds (likely abandoned/failed)
+    if (now - timestamp > 30000) {
+      pendingRequests.delete(id);
+    }
+  }
+},
+60000); // Run cleanup every minute
+
 /**
  * Simulates network latency for mock functions
  * @param {number} ms - Milliseconds to delay
@@ -311,7 +392,7 @@ const rateLimiter = new RateLimiter(
 );
 
 /**
- * Base API request function with retry logic
+ * Base API request function with robust retry logic and support for long-running operations
  * Implements advanced error handling, rate limiting, and retry patterns
  * 
  * @param {string} endpoint - API endpoint to call
@@ -322,6 +403,8 @@ const rateLimiter = new RateLimiter(
  * @param {number} options.timeout - Request timeout in ms
  * @param {boolean} options.useRateLimit - Whether to use rate limiting
  * @param {boolean} options.cacheable - Whether the request can be cached
+ * @param {boolean} options.longRunning - Whether this is a long-running operation that requires polling
+ * @param {Function} options.onPollStatus - Callback for status updates during polling
  * @returns {Promise<any>} - Promise that resolves to response data
  */
 async function apiRequest(endpoint, options = {}) {
@@ -332,17 +415,74 @@ async function apiRequest(endpoint, options = {}) {
     timeout = API_CONFIG.timeout,
     useRateLimit = true,
     cacheable = false,
+    longRunning = false,
+    onPollStatus = null,
+    skipDedupe = false // Option to skip deduplication for rare cases
   } = options;
+  
+  // Generate a deterministic request ID based on the request parameters
+  const deterministicRequestId = generateRequestId(endpoint, method, body);
+  
+  // Check for duplicate requests (unless explicitly skipped)
+  if (!skipDedupe) {
+    const { inProgress, recentlyCompleted } = checkRequestStatus(deterministicRequestId);
+    
+    if (inProgress) {
+      console.log(`Duplicate API request prevented for ${method} ${endpoint}`);
+      // Wait for the in-progress request to complete
+      return new Promise((resolve, reject) => {
+        const checkInterval = setInterval(() => {
+          if (!pendingRequests.has(deterministicRequestId)) {
+            clearInterval(checkInterval);
+            
+            // If request completed successfully, we should have its result
+            const recentResult = completedRequests.get(deterministicRequestId);
+            if (recentResult && recentResult.data) {
+              console.log(`Using result from concurrent request for ${method} ${endpoint}`);
+              resolve(recentResult.data);
+            } else {
+              // Something went wrong with the original request
+              reject(new Error('Concurrent request failed'));
+            }
+          }
+        }, 100);
+        
+        // Set a timeout in case the original request never completes
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          reject(new Error('Timed out waiting for concurrent request'));
+        }, timeout);
+      });
+    }
+    
+    if (recentlyCompleted) {
+      console.log(`Request ${method} ${endpoint} was just completed, throttling duplicate`);
+      const recentResult = completedRequests.get(deterministicRequestId);
+      if (recentResult && recentResult.data) {
+        return recentResult.data;
+      }
+    }
+  }
+  
+  // Mark this request as in progress
+  registerPendingRequest(deterministicRequestId);
 
   // Apply rate limiting if required
   if (useRateLimit) {
     await rateLimiter.acquireToken();
   }
 
-  // In mock mode or development, use mock functions
-  if (API_CONFIG.useMockData || process.env.NODE_ENV === 'development') {
-    // Use mock implementation
-    return mockApiRequest(endpoint, { method, body });
+  // Only use mock data if explicitly configured
+  if (API_CONFIG.useMockData) {
+    try {
+      // Use mock implementation
+      const mockResult = await mockApiRequest(endpoint, { method, body });
+      completeRequest(deterministicRequestId, true, mockResult);
+      return mockResult;
+    } catch (error) {
+      completeRequest(deterministicRequestId, false);
+      throw error;
+    }
   }
 
   // For real API calls, implement retry logic
@@ -395,14 +535,55 @@ async function apiRequest(endpoint, options = {}) {
           message: errorMessage
         });
         
+        // Special case for 5xx errors - retry with backoff
+        if (response.status >= 500) {
+          // Get retry delay from headers if available, or use exponential backoff
+          let retryAfter = response.headers.get('retry-after');
+          let delay;
+          
+          if (retryAfter) {
+            delay = parseInt(retryAfter, 10) * 1000; // Convert to ms
+          } else {
+            // Exponential backoff with jitter
+            const jitter = Math.random() * 300;
+            delay = Math.min(API_CONFIG.retryDelay * Math.pow(2, attempts) + jitter, 15000);
+          }
+          
+          console.log(`[${requestId}] Server error (${response.status}), retrying after ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          attempts++;
+          continue;
+        }
+        
         throw new Error(errorMessage);
       }
 
-      // Parse and return successful response
-      const responseData = await response.json();
+      // Parse response
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (error) {
+        console.error(`[${requestId}] Error parsing response:`, error);
+        throw new Error('Invalid response format from server');
+      }
+      
       const duration = Date.now() - startTime;
       console.log(`[${requestId}] API Response: ${method} ${endpoint} (${duration}ms)`);
       
+      // Handle 202 Accepted responses for long-running processes (async processing)
+      if (response.status === 202 && responseData.requestId && responseData.statusEndpoint) {
+        if (longRunning) {
+          console.log(`[${requestId}] Long-running task started with ID: ${responseData.requestId}`);
+          return await pollRequestStatus(responseData.requestId, responseData.statusEndpoint, { onPollStatus });
+        } else {
+          // If caller doesn't expect long-running, return the initial response
+          console.log(`[${requestId}] Returning 202 Accepted response without polling`);
+          return responseData;
+        }
+      }
+      
+      // Regular successful response
+      completeRequest(deterministicRequestId, true, { data: responseData });
       return responseData;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -417,6 +598,7 @@ async function apiRequest(endpoint, options = {}) {
       // Don't retry if we've reached the max attempts
       if (attempts >= API_CONFIG.retryAttempts) {
         console.error(`[${requestId}] Max retry attempts reached`);
+        completeRequest(deterministicRequestId, false);
         break;
       }
       
@@ -428,8 +610,130 @@ async function apiRequest(endpoint, options = {}) {
     }
   }
 
-  // If we've exhausted all retries, throw the last error
+  // If we've exhausted all retries, mark the request as failed and throw the error
+  completeRequest(deterministicRequestId, false);
   throw lastError;
+}
+
+/**
+ * Poll for the status of a long-running request
+ * 
+ * @param {string} requestId - The ID of the request
+ * @param {string} statusEndpoint - The endpoint to poll for status
+ * @param {Object} options - Optional settings
+ * @param {Function} options.onPollStatus - Callback for status updates during polling
+ * @returns {Promise<any>} - The final result of the request
+ */
+async function pollRequestStatus(requestId, statusEndpoint, options = {}) {
+  console.log(`Polling for request status: ${requestId}`);
+  
+  const { onPollStatus = null } = options;
+  
+  // Polling configuration
+  const MAX_POLLS = 30; // Maximum number of polling attempts
+  const INITIAL_POLL_INTERVAL = 1000; // Start with 1s interval
+  const MAX_POLL_INTERVAL = 5000; // Don't poll slower than every 5s
+  
+  let pollCount = 0;
+  let pollInterval = INITIAL_POLL_INTERVAL;
+  
+  while (pollCount < MAX_POLLS) {
+    // Wait before polling (except for first poll)
+    if (pollCount > 0) {
+      await delay(pollInterval);
+      
+      // Gradually increase the polling interval (up to MAX_POLL_INTERVAL)
+      pollInterval = Math.min(pollInterval * 1.5, MAX_POLL_INTERVAL);
+    }
+    
+    pollCount++;
+    console.log(`Poll ${pollCount}/${MAX_POLLS} for request ${requestId}`);
+    
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}${statusEndpoint}`);
+      
+      if (!response.ok) {
+        console.error(`Status poll failed: ${response.status} ${response.statusText}`);
+        
+        // Notify listener of error if provided
+        if (onPollStatus) {
+          onPollStatus({
+            status: 'error',
+            error: `Status poll failed: ${response.status} ${response.statusText}`
+          });
+        }
+        
+        continue;
+      }
+      
+      const statusData = await response.json();
+      
+      // Notify status update listener if provided
+      if (onPollStatus) {
+        onPollStatus(statusData);
+      }
+      
+      // Check status and return completed results
+      if (statusData.status === 'completed') {
+        console.log(`Request ${requestId} completed successfully`);
+        
+        // If results are included in the status response, return them
+        if (statusData.result) {
+          return statusData.result;
+        }
+        
+        // Otherwise, fetch the results separately
+        console.log(`Fetching results for completed request ${requestId}`);
+        const resultResponse = await fetch(`${API_CONFIG.baseUrl}/api/request-result/${requestId}`);
+        
+        if (!resultResponse.ok) {
+          throw new Error(`Failed to fetch results: ${resultResponse.status} ${resultResponse.statusText}`);
+        }
+        
+        return await resultResponse.json();
+      }
+      
+      // If the request failed, stop polling and throw an error
+      if (statusData.status === 'failed') {
+        const errorMsg = `Request failed: ${statusData.error || 'Unknown error'}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // For any other status, log progress and continue polling
+      console.log(`Request ${requestId} status: ${statusData.status}, progress: ${statusData.progress}%`);
+    } catch (error) {
+      console.error(`Error polling for status: ${error.message}`);
+      
+      // Notify listener of error if provided
+      if (onPollStatus) {
+        onPollStatus({
+          status: 'error',
+          error: error.message
+        });
+      }
+      
+      // Don't stop polling on error, just continue with the next poll
+      // unless we've hit the maximum number of polls
+      if (pollCount >= MAX_POLLS) {
+        throw error;
+      }
+    }
+  }
+  
+  // If we've exceeded the maximum number of polls, throw an error
+  const timeoutError = `Polling timed out after ${MAX_POLLS} attempts`;
+  console.error(timeoutError);
+  
+  // Final notification to listener
+  if (onPollStatus) {
+    onPollStatus({
+      status: 'timeout',
+      error: timeoutError
+    });
+  }
+  
+  throw new Error(timeoutError);
 }
 
 /**
@@ -453,6 +757,10 @@ async function mockApiRequest(endpoint, options) {
       return mockImproveResume(body);
     case endpoint.endsWith('/resume/export'):
       return mockExportResume(body);
+    case endpoint.endsWith('/resume/analyze'):
+      return mockAnalyzeResume(body?.resumeData);
+    case endpoint.endsWith('/resume/improvement-analytics'):
+      return mockImprovementAnalytics(body);
     default:
       throw new Error(`Unrecognized endpoint: ${endpoint}`);
   }
@@ -536,6 +844,95 @@ function mockExportResume(data) {
 }
 
 /**
+ * Mock function for resume analysis
+ * Returns a comprehensive analysis of the resume
+ */
+function mockAnalyzeResume(resumeData) {
+  return generateMockAnalysis(resumeData);
+}
+
+/**
+ * Mock function for resume improvement analytics
+ * Provides recommendations based on the improvements made so far
+ */
+function mockImprovementAnalytics(data) {
+  const { resumeData, improvements, savedBullets } = data;
+  
+  return {
+    success: true,
+    generalImprovements: [
+      "Add more quantifiable achievements with specific metrics (numbers, percentages, dollar amounts)",
+      "Ensure all bullet points start with powerful action verbs that showcase your initiative",
+      "Highlight technical skills that are most relevant to your target roles",
+      "Connect your achievements to business outcomes and demonstrate your impact",
+      "Remove unnecessary words and phrases for clarity and conciseness",
+      "Tailor your bullet points to mirror the language used in job descriptions",
+      "Add more industry-specific keywords for better ATS optimization"
+    ],
+    missingConcepts: [
+      {
+        category: "Leadership & Management",
+        skills: [
+          {
+            name: "Mentorship & Team Development",
+            recommendation: "Add examples of how you've mentored team members, provided training, or helped colleagues develop new skills."
+          },
+          {
+            name: "Strategic Planning & Vision",
+            recommendation: "Include instances where you've contributed to strategic initiatives, long-term planning, or helped shape the direction of projects."
+          },
+          {
+            name: "Cross-functional Leadership",
+            recommendation: "Highlight your ability to work across departments, align diverse teams, and lead initiatives that span multiple areas of the business."
+          }
+        ]
+      },
+      {
+        category: "Process Excellence & Innovation",
+        skills: [
+          {
+            name: "Process Automation",
+            recommendation: "Describe how you've automated manual processes, implemented tools, or created systems that improved efficiency."
+          },
+          {
+            name: "Continuous Improvement",
+            recommendation: "Show how you've identified opportunities for improvement, implemented changes, and measured results."
+          },
+          {
+            name: "Innovation & Problem Solving",
+            recommendation: "Highlight creative solutions you've developed to address complex challenges or improve existing systems."
+          }
+        ]
+      },
+      {
+        category: "Business Impact & Value Creation",
+        skills: [
+          {
+            name: "Revenue Growth & Business Development",
+            recommendation: "Include ways you've contributed to revenue growth, new business opportunities, or customer acquisition/retention."
+          },
+          {
+            name: "Cost Reduction & Efficiency",
+            recommendation: "Detail how your work has led to cost savings, better resource utilization, or improved ROI."
+          },
+          {
+            name: "Stakeholder Management",
+            recommendation: "Add examples of how you've effectively managed relationships with internal and external stakeholders."
+          }
+        ]
+      }
+    ],
+    aiInsights: [
+      "Your resume would benefit from more emphasis on leadership skills, even if you're not in a management position",
+      "Consider adding more examples that demonstrate your problem-solving approach rather than just listing responsibilities",
+      "Your strongest achievements focus on technical implementation - balance this with business impact statements",
+      "Many recruiters look for candidates who can bridge technical expertise with business understanding - highlight this skill",
+      "Most job descriptions now emphasize collaboration and teamwork - make sure your resume reflects these soft skills"
+    ]
+  };
+}
+
+/**
  * ResumeAPI client - provides methods for interacting with the Resume Improvement API
  */
 export const ResumeAPI = {
@@ -552,6 +949,7 @@ export const ResumeAPI = {
     try {
       if (API_CONFIG.useMockData) {
         // Mock implementation
+        console.log("Using mock data for resume parsing");
         return apiRequest('/api/v1/resume/parse', {
           method: 'POST',
           body: { filename: file.name }
@@ -619,6 +1017,9 @@ export const ResumeAPI = {
    * Get AI-powered comprehensive resume analysis
    * 
    * @param {Object} resumeData - Structured resume data with bullet points
+   * @param {Object} options - Optional settings
+   * @param {boolean} options.longRunning - Whether to treat as a long-running operation
+   * @param {Function} options.onStatusUpdate - Callback for status updates during polling
    * @returns {Promise<{
    *   strengths: string[],
    *   weaknesses: string[],
@@ -632,35 +1033,52 @@ export const ResumeAPI = {
    * Expected API Endpoint: POST /api/v1/resume/analyze
    * Content-Type: application/json
    */
-  async analyzeResume(resumeData) {
+  async analyzeResume(resumeData, options = {}) {
+    const { longRunning = false, onStatusUpdate = null } = options;
+    
     try {
       if (API_CONFIG.useMockData) {
         console.log("Using mock data for resume analysis");
-        await delay(1500); // Simulate AI processing time
+        
+        // If we have a status update callback, simulate progress updates
+        if (onStatusUpdate) {
+          // Simulate progress updates
+          onStatusUpdate({ status: 'starting', progress: 10 });
+          await delay(800);
+          onStatusUpdate({ status: 'processing', progress: 30 });
+          await delay(700);
+          onStatusUpdate({ status: 'processing', progress: 60 });
+          await delay(500);
+          onStatusUpdate({ status: 'finalizing', progress: 90 });
+          await delay(300);
+          onStatusUpdate({ status: 'completed', progress: 100 });
+        } else {
+          // Just a basic delay if no progress callback
+          await delay(1500);
+        }
         
         // Generate mock analysis based on the resume data
         const mockAnalysis = generateMockAnalysis(resumeData);
         return mockAnalysis;
       }
       
-      // Real API implementation:
+      // Real API implementation - use the robust apiRequest function
       console.log("Sending resume data to analysis API...");
-      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/resume/analyze`, {
+      return await apiRequest('/api/v1/resume/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ resumeData }),
+        body: { resumeData },
+        longRunning,
+        timeout: 60000, // 60 second timeout for analysis requests
+        
+        // Custom polling handler to provide progress updates
+        onPollStatus: longRunning && onStatusUpdate ? (statusData) => {
+          onStatusUpdate({
+            status: statusData.status,
+            progress: statusData.progress || 0,
+            error: statusData.error
+          });
+        } : null
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `API request failed with status ${response.status}`
-        );
-      }
-      
-      return await response.json();
     } catch (error) {
       console.error('Failed to get resume analysis:', error);
       throw new Error('Failed to generate resume analysis. Please try again later.');
@@ -688,105 +1106,51 @@ export const ResumeAPI = {
    * Expected API Endpoint: POST /api/v1/resume/improvement-analytics
    * Content-Type: application/json
    */
-  async getImprovementAnalytics(resumeData, improvements, savedBullets) {
+  async getImprovementAnalytics(resumeData, improvements, savedBullets, options = {}) {
+    const { longRunning = false, onStatusUpdate = null } = options;
+    
     try {
       if (API_CONFIG.useMockData) {
         console.log("Using mock data for improvement analytics");
-        await delay(2000); // Simulate AI processing time
         
-        // Return mock analytics data
-        return {
-          success: true,
-          generalImprovements: [
-            "Add more quantifiable achievements with specific metrics (numbers, percentages, dollar amounts)",
-            "Ensure all bullet points start with powerful action verbs that showcase your initiative",
-            "Highlight technical skills that are most relevant to your target roles",
-            "Connect your achievements to business outcomes and demonstrate your impact",
-            "Remove unnecessary words and phrases for clarity and conciseness",
-            "Tailor your bullet points to mirror the language used in job descriptions",
-            "Add more industry-specific keywords for better ATS optimization"
-          ],
-          missingConcepts: [
-            {
-              category: "Leadership & Management",
-              skills: [
-                {
-                  name: "Mentorship & Team Development",
-                  recommendation: "Add examples of how you've mentored team members, provided training, or helped colleagues develop new skills."
-                },
-                {
-                  name: "Strategic Planning & Vision",
-                  recommendation: "Include instances where you've contributed to strategic initiatives, long-term planning, or helped shape the direction of projects."
-                },
-                {
-                  name: "Cross-functional Leadership",
-                  recommendation: "Highlight your ability to work across departments, align diverse teams, and lead initiatives that span multiple areas of the business."
-                }
-              ]
-            },
-            {
-              category: "Process Excellence & Innovation",
-              skills: [
-                {
-                  name: "Process Automation",
-                  recommendation: "Describe how you've automated manual processes, implemented tools, or created systems that improved efficiency."
-                },
-                {
-                  name: "Continuous Improvement",
-                  recommendation: "Show how you've identified opportunities for improvement, implemented changes, and measured results."
-                },
-                {
-                  name: "Innovation & Problem Solving",
-                  recommendation: "Highlight creative solutions you've developed to address complex challenges or improve existing systems."
-                }
-              ]
-            },
-            {
-              category: "Business Impact & Value Creation",
-              skills: [
-                {
-                  name: "Revenue Growth & Business Development",
-                  recommendation: "Include ways you've contributed to revenue growth, new business opportunities, or customer acquisition/retention."
-                },
-                {
-                  name: "Cost Reduction & Efficiency",
-                  recommendation: "Detail how your work has led to cost savings, better resource utilization, or improved ROI."
-                },
-                {
-                  name: "Stakeholder Management",
-                  recommendation: "Add examples of how you've effectively managed relationships with internal and external stakeholders."
-                }
-              ]
-            }
-          ],
-          aiInsights: [
-            "Your resume would benefit from more emphasis on leadership skills, even if you're not in a management position",
-            "Consider adding more examples that demonstrate your problem-solving approach rather than just listing responsibilities",
-            "Your strongest achievements focus on technical implementation - balance this with business impact statements",
-            "Many recruiters look for candidates who can bridge technical expertise with business understanding - highlight this skill",
-            "Most job descriptions now emphasize collaboration and teamwork - make sure your resume reflects these soft skills"
-          ]
-        };
+        // If we have a status update callback, simulate progress updates
+        if (onStatusUpdate) {
+          // Simulate progress updates
+          onStatusUpdate({ status: 'starting', progress: 10 });
+          await delay(500);
+          onStatusUpdate({ status: 'processing', progress: 30 });
+          await delay(600);
+          onStatusUpdate({ status: 'analyzing_improvements', progress: 60 });
+          await delay(500);
+          onStatusUpdate({ status: 'finalizing', progress: 90 });
+          await delay(400);
+          onStatusUpdate({ status: 'completed', progress: 100 });
+        } else {
+          // Just a basic delay if no progress callback
+          await delay(2000);
+        }
+        
+        // Use our mock implementation that takes the same params for consistency
+        return mockImprovementAnalytics({ resumeData, improvements, savedBullets });
       }
       
-      // Real API implementation:
+      // Real API implementation using our robust apiRequest function
       console.log("Sending data to improvement analytics API...");
-      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/resume/improvement-analytics`, {
+      return await apiRequest('/api/v1/resume/improvement-analytics', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ resumeData, improvements, savedBullets }),
+        body: { resumeData, improvements, savedBullets },
+        longRunning,
+        timeout: 60000, // 60 second timeout for analytics
+        
+        // Custom polling handler to provide progress updates
+        onPollStatus: longRunning && onStatusUpdate ? (statusData) => {
+          onStatusUpdate({
+            status: statusData.status,
+            progress: statusData.progress || 0,
+            error: statusData.error
+          });
+        } : null
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.message || `API request failed with status ${response.status}`
-        );
-      }
-      
-      return await response.json();
     } catch (error) {
       console.error('Failed to get improvement analytics:', error);
       throw new Error('Failed to generate improvement recommendations. Please try again later.');

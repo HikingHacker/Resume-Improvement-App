@@ -376,6 +376,13 @@ export function ResumeProvider({ children }) {
     const currentBulletId = getCurrentBulletId();
     if (!currentBulletId) return null;
     
+    // Check if we already have data for this bullet point
+    const existingImprovement = state.improvements[currentBulletId];
+    if (existingImprovement && existingImprovement.success) {
+      console.log(`Using existing improvement data for bullet ${currentBulletId}`);
+      return existingImprovement;
+    }
+    
     const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
     
@@ -385,7 +392,12 @@ export function ResumeProvider({ children }) {
       const userContext = Object.values(state.additionalContexts[currentBulletId] || {}).join(' ');
       const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
       
-      const suggestions = await resumeService.getAISuggestions(currentBullet, contextToSend);
+      // Pass the bulletId for bullet-specific loading state tracking
+      const suggestions = await resumeService.getAISuggestions(
+        currentBullet, 
+        contextToSend,
+        currentBulletId // Pass the bulletId for deduplication
+      );
       
       if (suggestions) {
         dispatch({ 
@@ -411,6 +423,7 @@ export function ResumeProvider({ children }) {
     state.currentBulletIndex, 
     state.additionalContexts, 
     state.showFollowUpForBullets,
+    state.improvements,
     resumeService,
     getCurrentBulletId
   ]);
@@ -441,12 +454,19 @@ export function ResumeProvider({ children }) {
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
     
     try {
+      console.log(`Submitting additional context for bullet ${bulletId}`);
+      
       // Include job context in the additional context
       const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
       const userContext = Object.values(state.additionalContexts[bulletId] || {}).join(' ');
       const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
       
-      const newSuggestions = await resumeService.getAISuggestions(currentBullet, contextToSend);
+      // Pass the bulletId for bullet-specific loading state tracking
+      const newSuggestions = await resumeService.getAISuggestions(
+        currentBullet, 
+        contextToSend,
+        bulletId // Pass the bulletId for deduplication
+      );
       
       if (newSuggestions) {
         dispatch({ 

@@ -20,13 +20,14 @@ export const OPERATION_TYPES = Object.freeze({
  * @returns {Object} Resume service with loading states, error handling, and API methods
  */
 export const useResumeService = (apiService = ResumeAPI) => {
-  // State for tracking loading status of different operations
+  // State for tracking loading status of different operations - enhanced to support per-bullet tracking
   const [loading, setLoading] = useState({
     [OPERATION_TYPES.PARSE]: false,
-    [OPERATION_TYPES.IMPROVE]: false,
+    [OPERATION_TYPES.IMPROVE]: false, // This will be enhanced with bullet IDs
     [OPERATION_TYPES.EXPORT]: false,
     [OPERATION_TYPES.ANALYZE]: false,
-    [OPERATION_TYPES.ANALYTICS]: false
+    [OPERATION_TYPES.ANALYTICS]: false,
+    bulletMap: {} // Map of bullet IDs to loading state
   });
   
   // State for tracking errors from different operations
@@ -35,19 +36,73 @@ export const useResumeService = (apiService = ResumeAPI) => {
     [OPERATION_TYPES.IMPROVE]: null,
     [OPERATION_TYPES.EXPORT]: null,
     [OPERATION_TYPES.ANALYZE]: null,
-    [OPERATION_TYPES.ANALYTICS]: null
+    [OPERATION_TYPES.ANALYTICS]: null,
+    bulletMap: {} // Map of bullet IDs to error messages
   });
 
-  // Helper functions for consistent state management
-  const startOperation = useCallback((operationType) => {
-    setLoading(prev => ({ ...prev, [operationType]: true }));
-    setErrors(prev => ({ ...prev, [operationType]: null }));
+  // Helper functions for consistent state management - enhanced for bullet-level tracking
+  const startOperation = useCallback((operationType, bulletId = null) => {
+    setLoading(prev => {
+      if (bulletId) {
+        // For bullet-specific operations, track in the bulletMap
+        return { 
+          ...prev, 
+          [operationType]: true,
+          bulletMap: { 
+            ...prev.bulletMap, 
+            [bulletId]: true 
+          }
+        };
+      }
+      // Standard operation without bullet ID
+      return { ...prev, [operationType]: true };
+    });
+    
+    setErrors(prev => {
+      if (bulletId) {
+        return { 
+          ...prev, 
+          [operationType]: null,
+          bulletMap: { 
+            ...prev.bulletMap, 
+            [bulletId]: null 
+          }
+        };
+      }
+      return { ...prev, [operationType]: null };
+    });
   }, []);
 
-  const endOperation = useCallback((operationType, error = null) => {
-    setLoading(prev => ({ ...prev, [operationType]: false }));
+  const endOperation = useCallback((operationType, error = null, bulletId = null) => {
+    setLoading(prev => {
+      if (bulletId) {
+        return { 
+          ...prev, 
+          [operationType]: false,
+          bulletMap: { 
+            ...prev.bulletMap, 
+            [bulletId]: false 
+          }
+        };
+      }
+      return { ...prev, [operationType]: false };
+    });
+    
     if (error) {
-      setErrors(prev => ({ ...prev, [operationType]: error.message || String(error) }));
+      setErrors(prev => {
+        const errorMsg = error.message || String(error);
+        if (bulletId) {
+          return { 
+            ...prev, 
+            [operationType]: errorMsg,
+            bulletMap: { 
+              ...prev.bulletMap, 
+              [bulletId]: errorMsg 
+            }
+          };
+        }
+        return { ...prev, [operationType]: errorMsg };
+      });
     }
   }, []);
 
@@ -74,28 +129,64 @@ export const useResumeService = (apiService = ResumeAPI) => {
 
   /**
    * Get AI-powered improvements for a specific bullet point
+   * @param {string} bulletPoint - The bullet point text to improve
+   * @param {string} additionalContext - Additional context for the improvement
+   * @param {string} bulletId - Unique identifier for this bullet point (for deduplication)
    */
-  const getAISuggestions = useCallback(async (bulletPoint, additionalContext = "") => {
-    startOperation(OPERATION_TYPES.IMPROVE);
+  const getAISuggestions = useCallback(async (bulletPoint, additionalContext = "", bulletId = null) => {
+    // Use bullet-level tracking if a bulletId is provided
+    const operationKey = OPERATION_TYPES.IMPROVE;
+    
+    // First check if this specific bullet is already being processed
+    if (bulletId && loading.bulletMap[bulletId]) {
+      console.log(`Improvement already in progress for bullet ${bulletId}, skipping duplicate request`);
+      return null;
+    }
+    
+    // Start the operation, tracking both the global state and bullet-specific state
+    startOperation(operationKey, bulletId);
     
     try {
-      return await apiService.getAISuggestions(bulletPoint, additionalContext);
+      console.log(`Requesting improvement for bullet ${bulletId || 'unknown'}`);
+      const result = await apiService.getAISuggestions(bulletPoint, additionalContext);
+      return result;
     } catch (error) {
-      endOperation(OPERATION_TYPES.IMPROVE, error);
+      console.error(`Error improving bullet ${bulletId || 'unknown'}:`, error);
+      endOperation(operationKey, error, bulletId);
       return null;
     } finally {
-      endOperation(OPERATION_TYPES.IMPROVE);
+      endOperation(operationKey, null, bulletId);
     }
-  }, [startOperation, endOperation, apiService]);
+  }, [startOperation, endOperation, apiService, loading]);
 
   /**
    * Get AI-powered comprehensive resume analysis
+   * Supports polling for long-running operations with progress updates
    */
   const analyzeResume = useCallback(async (resumeData) => {
     startOperation(OPERATION_TYPES.ANALYZE);
     
     try {
-      return await apiService.analyzeResume(resumeData);
+      // Show status updates during long-running operation
+      const onStatusUpdate = (status) => {
+        if (status && status.progress) {
+          // Update loading state with progress information
+          setLoading(prev => ({ 
+            ...prev, 
+            [OPERATION_TYPES.ANALYZE]: { 
+              inProgress: true, 
+              progress: status.progress,
+              status: status.status
+            } 
+          }));
+        }
+      };
+      
+      // Call the API with polling enabled for this long-running operation
+      return await apiService.analyzeResume(resumeData, { 
+        longRunning: true,
+        onStatusUpdate
+      });
     } catch (error) {
       console.error("Error in analyzeResume:", error);
       endOperation(OPERATION_TYPES.ANALYZE, error);
@@ -103,7 +194,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
     } finally {
       endOperation(OPERATION_TYPES.ANALYZE);
     }
-  }, [startOperation, endOperation, apiService]);
+  }, [startOperation, endOperation, apiService, setLoading]);
 
   /**
    * Export an improved resume for download
@@ -150,12 +241,32 @@ export const useResumeService = (apiService = ResumeAPI) => {
 
   /**
    * Get AI-powered improvement analytics and recommendations
+   * Supports polling for long-running operations with progress updates
    */
   const getImprovementAnalytics = useCallback(async (resumeData, improvements, savedBullets) => {
     startOperation(OPERATION_TYPES.ANALYTICS);
     
     try {
-      return await apiService.getImprovementAnalytics(resumeData, improvements, savedBullets);
+      // Show status updates during long-running operation
+      const onStatusUpdate = (status) => {
+        if (status && status.progress) {
+          // Update loading state with progress information
+          setLoading(prev => ({ 
+            ...prev, 
+            [OPERATION_TYPES.ANALYTICS]: { 
+              inProgress: true, 
+              progress: status.progress,
+              status: status.status
+            } 
+          }));
+        }
+      };
+      
+      // Call the API with polling enabled for this long-running operation
+      return await apiService.getImprovementAnalytics(resumeData, improvements, savedBullets, {
+        longRunning: true,
+        onStatusUpdate
+      });
     } catch (error) {
       console.error("Error in getImprovementAnalytics:", error);
       endOperation(OPERATION_TYPES.ANALYTICS, error);
@@ -163,7 +274,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
     } finally {
       endOperation(OPERATION_TYPES.ANALYTICS);
     }
-  }, [startOperation, endOperation, apiService]);
+  }, [startOperation, endOperation, apiService, setLoading]);
 
   // Memoize the service interface to prevent unnecessary re-renders
   const service = useMemo(() => ({

@@ -22,8 +22,11 @@ const CLAUDE_CONFIG = {
   temperature: 0.7, // Controlling randomness
 };
 
+// Request tracking for client-side deduplication with React StrictMode
+const pendingClientRequests = new Map();
+
 /**
- * Makes a request to Claude API
+ * Makes a request to Claude API with robust error handling and backoff strategies
  * 
  * @param {Object} options - Request options
  * @param {string} options.prompt - The prompt to send to Claude
@@ -33,49 +36,162 @@ const CLAUDE_CONFIG = {
  * @returns {Promise<string>} - Promise that resolves to Claude's response
  */
 export const callClaudeAPI = async (options) => {
+  // Create a unique key for this specific API call
+  const requestKey = `${options.prompt?.substring(0, 50)}|${options.systemPrompt?.substring(0, 50)}|${options.maxTokens}|${options.temperature}`;
+  
+  // Check if this exact request is already in progress
+  if (pendingClientRequests.has(requestKey)) {
+    console.log("Duplicate Claude API request detected, reusing pending request");
+    return pendingClientRequests.get(requestKey);
+  }
+  
+  // Create a promise for this request
+  const requestPromise = _executeClaudeRequest(options);
+  
+  // Store the promise so other duplicate calls can use it
+  pendingClientRequests.set(requestKey, requestPromise);
+  
+  // Once the request completes (whether success or error), remove it from pending
+  requestPromise.finally(() => {
+    pendingClientRequests.delete(requestKey);
+  });
+  
+  // Return the promise to the caller
+  return requestPromise;
+};
+
+/**
+ * Actual implementation that makes request to Claude API
+ * This is separated to allow for the deduplication wrapper above
+ */
+const _executeClaudeRequest = async (options) => {
   const { 
     prompt, 
     systemPrompt,
     maxTokens = CLAUDE_CONFIG.maxTokens,
-    temperature = CLAUDE_CONFIG.temperature 
+    temperature = CLAUDE_CONFIG.temperature,
+    requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
   } = options;
 
   if (!CLAUDE_CONFIG.apiKey) {
     console.error('Claude API key is not set. Please add REACT_APP_ANTHROPIC_API_KEY to your environment variables.');
     throw new Error('Claude API key is not configured.');
   }
+  
+  // Retry configuration
+  const MAX_RETRIES = 3;
+  const BASE_DELAY = 1000; // 1 second
+  const MAX_DELAY = 15000; // 15 seconds
+  let attempt = 0;
+  
+  // Log the start of the request with the provided requestId
+  console.log(`[${requestId}] Starting Claude API request`);
 
-  try {
-    const response = await fetch(`${CLAUDE_CONFIG.baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_CONFIG.apiKey,
-        'anthropic-version': CLAUDE_CONFIG.apiVersion,
-      },
-      body: JSON.stringify({
-        model: CLAUDE_CONFIG.model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      }),
-    });
+  while (attempt <= MAX_RETRIES) {
+    try {
+      // Log attempt if retrying
+      if (attempt > 0) {
+        console.log(`[${requestId}] Retry attempt ${attempt}/${MAX_RETRIES}`);
+      }
+      
+      // Configure request timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      // Make the API call
+      const response = await fetch(`${CLAUDE_CONFIG.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_CONFIG.apiKey,
+          'anthropic-version': CLAUDE_CONFIG.apiVersion,
+        },
+        body: JSON.stringify({
+          model: CLAUDE_CONFIG.model,
+          max_tokens: maxTokens,
+          temperature: temperature,
+          system: systemPrompt,
+          messages: [
+            { role: 'user', content: prompt }
+          ]
+        }),
+        signal: controller.signal
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Claude API error:', errorText);
-      throw new Error(`Claude API returned error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${requestId}] Claude API error:`, errorText);
+        
+        // Handle different error types with specific retry logic
+        const status = response.status;
+        
+        // Don't retry certain errors (client errors)
+        if (status === 400 || status === 401 || status === 403) {
+          throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+        }
+        
+        // For server errors (5xx) and rate limits (429), retry with backoff
+        if (status >= 500 || status === 429) {
+          if (attempt >= MAX_RETRIES) {
+            throw new Error(`Claude API returned error after ${MAX_RETRIES} retries: ${status} ${response.statusText}`);
+          }
+          
+          // Get retry delay from headers if available, or use exponential backoff
+          let retryAfter = response.headers.get('retry-after');
+          let delay;
+          
+          if (retryAfter) {
+            delay = parseInt(retryAfter, 10) * 1000; // Convert to ms
+          } else {
+            // Exponential backoff with jitter
+            const jitter = Math.random() * 300;
+            delay = Math.min(BASE_DELAY * Math.pow(2, attempt) + jitter, MAX_DELAY);
+          }
+          
+          console.log(`[${requestId}] Retrying after ${delay}ms due to ${status} error...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          attempt++;
+          continue;
+        }
+        
+        throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`[${requestId}] Claude API request successful`);
+      return data.content[0].text;
+    } catch (error) {
+      // Special handling for timeouts
+      if (error.name === 'AbortError') {
+        console.error(`[${requestId}] Request timed out`);
+        
+        if (attempt >= MAX_RETRIES) {
+          throw new Error('Claude API request timed out after multiple attempts');
+        }
+      } else if (attempt >= MAX_RETRIES) {
+        // We've run out of retries
+        console.error(`[${requestId}] Final error calling Claude API:`, error);
+        throw new Error('Failed to get response from Claude. Please try again later.');
+      }
+      
+      // Calculate backoff time with jitter for network errors and other retryable errors
+      const jitter = Math.random() * 300;
+      const delay = Math.min(BASE_DELAY * Math.pow(2, attempt) + jitter, MAX_DELAY);
+      
+      console.log(`[${requestId}] Request failed, retrying after ${delay}ms...`);
+      console.error(`[${requestId}] Error:`, error);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempt++;
     }
-
-    const data = await response.json();
-    return data.content[0].text;
-  } catch (error) {
-    console.error('Error calling Claude API:', error);
-    throw new Error('Failed to get response from Claude. Please try again later.');
   }
+  
+  // This should not be reached due to the throw in the retry loop,
+  // but just in case we hit the maximum retries without an explicit throw
+  throw new Error(`Failed after ${MAX_RETRIES} retry attempts`);
 };
 
 /**

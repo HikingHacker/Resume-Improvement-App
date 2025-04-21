@@ -5,6 +5,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+// Re-enabled StrictMode with proper API deduplication in place
 root.render(
   <React.StrictMode>
     <App />
