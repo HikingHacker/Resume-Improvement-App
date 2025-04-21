@@ -24,8 +24,8 @@ const StepNavigation = ({
   className = '',
 }) => {
   return (
-    <div className={cn("w-full mb-8 flex justify-center", className)}>
-      <div className="flex items-center max-w-4xl w-full">
+    <div className={cn("w-full mb-4 md:mb-8 flex justify-center overflow-x-auto px-1", className)}>
+      <div className="flex items-start max-w-4xl w-full md:px-0 py-2">
         {steps.map((step, index) => {
           const isActive = currentStep === step.value;
           const isDisabled = disabled.includes(step.value);
@@ -35,13 +35,13 @@ const StepNavigation = ({
           return (
             <React.Fragment key={index}>
               {/* Step item */}
-              <div className="flex flex-col items-center justify-center relative z-10">
+              <div className="flex flex-col items-center justify-start relative z-10 flex-shrink-0 mx-1 h-24">
                 {/* Step circle */}
                 <button 
                   onClick={() => !isDisabled && onStepClick(step.value)}
                   disabled={isDisabled}
                   className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 relative",
+                    "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-200 relative",
                     isActive 
                       ? "bg-primary-600 dark:bg-primary-500 text-white shadow-md" 
                       : isCompleted
@@ -55,15 +55,15 @@ const StepNavigation = ({
                   title={isDisabled ? "This step is not available yet" : step.label}
                 >
                   {isCompleted ? (
-                    <CheckCircle className="w-5 h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
                   ) : (
-                    <span className="text-sm font-semibold">{step.icon || index + 1}</span>
+                    <span className="text-xs sm:text-sm font-semibold">{step.icon || index + 1}</span>
                   )}
                 </button>
                 
                 {/* Step label */}
                 <span className={cn(
-                  "mt-2 text-xs font-medium text-center w-20 transition-colors duration-200",
+                  "mt-1 sm:mt-2 text-xs font-medium text-center px-1 transition-colors duration-200 leading-tight w-20 sm:w-24",
                   isActive 
                     ? "text-primary-700 dark:text-primary-300" 
                     : isCompleted
@@ -78,7 +78,7 @@ const StepNavigation = ({
               {!isLast && (
                 <div 
                   className={cn(
-                    "flex-1 h-0.5 mx-1",
+                    "flex-1 h-0.5 mx-0.5 sm:mx-1 min-w-[0.5rem] self-start mt-4 sm:mt-5", // Position the line at the level of the circle
                     isCompleted && isStepCompleted(steps[index + 1].value) 
                       ? "bg-primary-600 dark:bg-primary-500" 
                       : "bg-gray-300 dark:bg-gray-600"

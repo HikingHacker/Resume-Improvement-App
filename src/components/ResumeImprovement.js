@@ -467,9 +467,9 @@ const ResumeImprovement = () => {
     if (!jobs || jobs.length <= 1) return null;
     
     return (
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Jump to Position:</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {jobs.map((job, index) => (
             <button
               key={index}
@@ -479,7 +479,7 @@ const ResumeImprovement = () => {
                 setCurrentBulletIndex(0);
               }}
               className={`
-                px-3 py-2 text-left rounded border transition-colors text-sm
+                px-2 sm:px-3 py-1.5 sm:py-2 text-left rounded border transition-colors text-xs sm:text-sm
                 flex items-center
                 ${currentJobIndex === index 
                   ? 'bg-primary-100 dark:bg-primary-900 border-primary-300 dark:border-primary-700 text-primary-800 dark:text-primary-200' 
@@ -488,8 +488,8 @@ const ResumeImprovement = () => {
               `}
               aria-pressed={currentJobIndex === index}
             >
-              <div className="mr-2 flex-shrink-0">
-                <Building className={`w-4 h-4 ${currentJobIndex === index ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`} />
+              <div className="mr-1.5 sm:mr-2 flex-shrink-0">
+                <Building className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentJobIndex === index ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`} />
               </div>
               <div className="flex-1 overflow-hidden">
                 <div className="font-medium truncate dark:text-white">{job.position}</div>
@@ -514,14 +514,14 @@ const ResumeImprovement = () => {
     if (!currentJob || !currentJob.achievements || currentJob.achievements.length <= 1) return null;
     
     return (
-      <div className="flex flex-wrap gap-1 mb-4">
+      <div className="flex flex-wrap justify-center sm:justify-start gap-1 mb-4 overflow-x-auto py-1">
         {currentJob.achievements.map((_, index) => (
           <button
             key={index}
             onClick={() => setCurrentBulletIndex(index)} // Using context function
             className={`
-              w-8 h-8 rounded-full flex items-center justify-center text-sm
-              transition-colors duration-200
+              w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm
+              transition-colors duration-200 flex-shrink-0
               ${currentBulletIndex === index 
                 ? 'bg-primary-600 dark:bg-primary-700 text-white' 
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
@@ -2813,13 +2813,14 @@ const ResumeImprovement = () => {
         
         {/* Navigation steps - only show if we're past feature selection */}
         {step > 0 && (
-          <div className="w-full px-2 mb-6 mt-2 animate-fade-in">
+          <div className="w-full px-0 sm:px-2 mb-2 sm:mb-8 mt-1 sm:mt-4 animate-fade-in overflow-hidden">
             <StepNavigation 
               currentStep={step} 
               steps={navigationSteps.slice(1)} // Skip feature selection step in nav
               onStepClick={step => handleStepNavigation(step)}
               disabled={disabledSteps()}
               isStepCompleted={isStepCompleted}
+              className="px-0"
             />
           </div>
         )}
