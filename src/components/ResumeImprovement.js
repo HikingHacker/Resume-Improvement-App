@@ -385,6 +385,7 @@ const ResumeImprovement = () => {
               className="w-full bg-gradient-to-r from-primary-600 to-primary-500 text-white px-6 py-4 rounded-lg flex items-center justify-between hover:from-primary-700 hover:to-primary-600 shadow-md hover:shadow-lg transition-all"
             >
               <div className="flex flex-col items-start">
+                <span className="text-lg font-semibold">Resume Assistant</span>
                 <span className="text-sm text-primary-100">Enhance your bullet points with AI suggestions</span>
               </div>
               <div className="bg-primary-400 p-2 rounded-full group-hover:bg-primary-300 transition-colors">

@@ -35,7 +35,7 @@ const StepNavigation = ({
           return (
             <React.Fragment key={index}>
               {/* Step item */}
-              <div className="flex flex-col items-center justify-start relative z-10 flex-shrink-0 mx-1 h-24">
+              <div className="flex flex-col items-center justify-start relative z-10 flex-shrink-0 mx-0 h-24">
                 {/* Step circle */}
                 <button 
                   onClick={() => !isDisabled && onStepClick(step.value)}
@@ -78,11 +78,12 @@ const StepNavigation = ({
               {!isLast && (
                 <div 
                   className={cn(
-                    "flex-1 h-0.5 mx-0.5 sm:mx-1 min-w-[0.5rem] self-start mt-4 sm:mt-5", // Position the line at the level of the circle
+                    "flex-1 h-0.5 -mx-2 min-w-[2rem] self-start mt-4 sm:mt-5", // Extends lines with negative margin
                     isCompleted && isStepCompleted(steps[index + 1].value) 
                       ? "bg-primary-600 dark:bg-primary-500" 
                       : "bg-gray-300 dark:bg-gray-600"
                   )}
+                  style={{ marginLeft: "-4px", marginRight: "-4px" }} // Fine-tune the exact positioning
                   aria-hidden="true"
                 ></div>
               )}
