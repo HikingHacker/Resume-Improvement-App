@@ -14,7 +14,9 @@ import {
   TableRow, 
   TableHead, 
   TableCell,
-  Textarea
+  Textarea,
+  Skeleton,
+  SkeletonText
 } from '../ui';
 
 const AddMissingSkills = ({ 
@@ -32,7 +34,8 @@ const AddMissingSkills = ({
   generatingSkillBullet,
   saveNewSkillBullet,
   onNext,
-  onBack
+  onBack,
+  loading // Add loading prop
 }) => {
   const [bulletText, setBulletText] = useState('');
   const [activeTab, setActiveTab] = useState('select'); // 'select', 'generate', 'review'
@@ -121,6 +124,47 @@ const AddMissingSkills = ({
   
   // Render the skills selection tab
   const renderSkillSelection = () => {
+    // Loading state with skeleton UI
+    if (loading?.analytics) {
+      return (
+        <div className="space-y-6">
+          {/* Skeleton for category selection */}
+          <div>
+            <h3 className="font-semibold mb-3 text-gray-800 dark:text-gray-200">1. Select a Skill Category:</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1, 2, 3, 4, 5, 6].map((index) => (
+                <div key={index} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-5 w-32 mb-1" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Skeleton for skill selection */}
+          <div>
+            <h3 className="font-semibold mb-3 text-gray-800 dark:text-gray-200">2. Select a Specific Skill:</h3>
+            <div className="grid grid-cols-1 gap-3 border p-4 rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              {[1, 2, 3].map((index) => (
+                <div key={index} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700">
+                  <div className="flex flex-col">
+                    <Skeleton className="h-5 w-40 mb-2" />
+                    <SkeletonText lines={2} className="w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="h-10 flex justify-end">
+            <Skeleton className="w-40 h-10 rounded" />
+          </div>
+        </div>
+      );
+    }
+    
     if (!aiRecommendations?.missingConcepts || aiRecommendations.missingConcepts.length === 0) {
       return (
         <div className="p-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-center">
@@ -551,6 +595,71 @@ const AddMissingSkills = ({
     );
   };
   
+  // Main loading skeleton for the entire component
+  if (loading?.analytics) {
+    return (
+      <Card className="w-full shadow-md transition-colors duration-200">
+        <CardHeader>
+          <CardTitle className="text-xl">Add Missing Skills</CardTitle>
+          <CardDescription>
+            Strengthen your resume by adding bullet points for important missing skills
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          {/* Progress indicator skeleton */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
+              <div className="h-2 bg-primary-600 dark:bg-primary-500 rounded-full w-1/4" />
+            </div>
+          </div>
+
+          {/* Tab content skeleton */}
+          <div className="space-y-6">
+            {/* Category selection skeletons */}
+            <div>
+              <h3 className="font-semibold mb-3 text-gray-800 dark:text-gray-200">Select a Skill Category:</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[1, 2, 3, 4, 5, 6].map((index) => (
+                  <div key={index} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-5 w-32 mb-1" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Skill selection skeletons */}
+            <div>
+              <h3 className="font-semibold mb-3 text-gray-800 dark:text-gray-200">Select a Specific Skill:</h3>
+              <div className="grid grid-cols-1 gap-3 border p-4 rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                {[1, 2, 3, 4].map((index) => (
+                  <div key={index} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700">
+                    <div className="flex flex-col">
+                      <Skeleton className="h-5 w-40 mb-2" />
+                      <SkeletonText lines={2} className="w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+        
+        <CardFooter className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
+          <Skeleton className="h-10 w-36 rounded" />
+          <Skeleton className="h-10 w-36 rounded" />
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full shadow-md transition-colors duration-200">
       <CardHeader>
