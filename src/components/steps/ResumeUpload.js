@@ -15,7 +15,7 @@ const ResumeUpload = ({ onFileUpload, loading, error, onBack, onNext }) => {
   return (
     <Card className="w-full shadow-md dark:bg-gray-800">
       <CardHeader>
-        <CardTitle className="text-2xl text-center">Resume Improvement Assistant</CardTitle>
+        <CardTitle className="text-2xl text-center">Resume DJ</CardTitle>
         <CardDescription className="text-center">
           Transform your resume with AI-powered insights and improvements
         </CardDescription>

@@ -119,7 +119,13 @@ const ResumeImprovement = () => {
   const [editedBullet, setEditedBullet] = React.useState("");
 
   // Function to fetch AI-powered analytics and recommendations
-  const getAnalytics = React.useCallback(async () => {
+  const getAnalytics = React.useCallback(async (force = false) => {
+    // Skip if we already have analytics data and not forcing a refresh
+    if (aiRecommendations && !force) {
+      console.log("Using cached analytics data");
+      return aiRecommendations;
+    }
+    
     try {
       // Use context startOperation method instead of direct setLoading
       startOperation("analytics");
@@ -133,18 +139,21 @@ const ResumeImprovement = () => {
       if (analyticsData && analyticsData.success) {
         setAiRecommendations(analyticsData);
         console.log("AI analytics data received:", analyticsData);
+        return analyticsData;
       } else {
         console.error("Failed to get AI analytics data");
+        return null;
       }
     } catch (error) {
       console.error("Error fetching AI analytics:", error);
       // Use context setErrors method
       setErrors(prev => ({ ...prev, analytics: error.message || "Failed to get AI analytics data" }));
+      return null;
     } finally {
       // Use context endOperation method instead of direct setLoading
       endOperation("analytics");
     }
-  }, [startOperation, getImprovementAnalytics, resumeData, improvements, savedBullets, setErrors, endOperation]);
+  }, [startOperation, getImprovementAnalytics, resumeData, improvements, savedBullets, setErrors, endOperation, aiRecommendations]);
   
   // Add a new UI action for clearing storage and resetting state
   const handleClearStorage = () => {
@@ -376,7 +385,6 @@ const ResumeImprovement = () => {
               className="w-full bg-gradient-to-r from-primary-600 to-primary-500 text-white px-6 py-4 rounded-lg flex items-center justify-between hover:from-primary-700 hover:to-primary-600 shadow-md hover:shadow-lg transition-all"
             >
               <div className="flex flex-col items-start">
-                <span className="text-lg font-semibold">Resume Improvement Assistant</span>
                 <span className="text-sm text-primary-100">Enhance your bullet points with AI suggestions</span>
               </div>
               <div className="bg-primary-400 p-2 rounded-full group-hover:bg-primary-300 transition-colors">
@@ -1461,7 +1469,7 @@ const ResumeImprovement = () => {
                     We couldn't generate AI recommendations at this time. This could be due to a connection issue or insufficient data.
                   </p>
                   <Button 
-                    onClick={getAnalytics} 
+                    onClick={() => getAnalytics(true)} 
                     variant="primary"
                     loading={loading.analytics}
                   >
@@ -1484,6 +1492,10 @@ const ResumeImprovement = () => {
             <Button 
               onClick={() => {
                 window.scrollTo(0, 0);
+                // Ensure we have analytics data
+                if (!aiRecommendations) {
+                  getAnalytics();
+                }
                 handleStepNavigation(3.75);
               }} 
               variant="primary"
@@ -1856,8 +1868,11 @@ const ResumeImprovement = () => {
       }
     }
     
-    // Fetch analytics data when entering the improvement analytics screen
-    if (step === 3.5 && !aiRecommendations) {
+    // Fetch analytics data when entering the improvement analytics screen OR Add Missing Skills screen
+    // Only call if we're at either the analytics or missing skills step, don't have recommendations yet, 
+    // and we're not currently loading analytics data
+    if ((step === 3.5 || step === 4) && !aiRecommendations && !loading.analytics) {
+      console.log(`Loading analytics data at step ${step}`);
       getAnalytics();
     }
   }, [step, resumeAnalysis, resumeEdited, resumeData, aiRecommendations, getAnalytics, getResumeAnalysis, setResumeEdited]);
@@ -2521,7 +2536,6 @@ const ResumeImprovement = () => {
         return (
           <Card className="w-full shadow-md dark:bg-gray-800">
             <CardHeader>
-              <CardTitle className="text-2xl text-center">Resume Improvement Assistant</CardTitle>
               <CardDescription className="text-center">
                 Transform your resume with AI-powered insights and improvements
               </CardDescription>
@@ -2636,6 +2650,11 @@ const ResumeImprovement = () => {
       case 3.5:
         return renderImprovementAnalytics();
       case 3.75:
+        // Ensure we have analytics data before rendering the missing skills component
+        if (!aiRecommendations && !loading.analytics) {
+          // Load analytics data if not already loading or available
+          getAnalytics();
+        }
         return (
           <AddMissingSkills
             resumeData={resumeData}
@@ -2650,6 +2669,7 @@ const ResumeImprovement = () => {
             generateSkillBullet={generateSkillBullet}
             generatingSkillBullet={generatingSkillBullet}
             saveNewSkillBullet={saveNewSkillBullet}
+            loading={loading.analytics}
             onNext={() => {
               window.scrollTo(0, 0);
               handleStepNavigation(4);
@@ -2750,6 +2770,13 @@ const ResumeImprovement = () => {
   };
 
   useTheme(); // We need the theme context but don't use its properties
+  
+  // Use effect to load analytics data when arriving at step 3.5
+  React.useEffect(() => {
+    if (step === 3.5 && !aiRecommendations && !loading.analytics) {
+      getAnalytics();
+    }
+  }, [step, aiRecommendations, loading.analytics, getAnalytics]);
 
   // Determine which steps should be disabled
   const disabledSteps = () => {
@@ -2772,9 +2799,13 @@ const ResumeImprovement = () => {
     <div className="min-h-screen flex flex-col items-center transition-colors duration-200">
       <div className="w-full max-w-7xl flex flex-col items-center justify-center flex-grow py-8 px-4">
         <div className="w-full text-center">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-900 dark:text-white transition-colors">
-            Resume Improvement Assistant
-          </h1>
+          <div className="flex justify-center mb-4">
+            <img
+              src={`${process.env.PUBLIC_URL}/resume_dj_logo.png`}
+              alt="Resume DJ Logo"
+              className="h-32 w-auto"
+            />
+          </div>
           <p className="text-gray-600 dark:text-gray-300 mb-4 mx-auto max-w-2xl transition-colors">
             Don’t just apply—headline the show.
           </p>

@@ -31,16 +31,13 @@ const Layout = ({
       ) : (
         <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className={fluid ? 'container-fluid px-4' : 'container mx-auto px-4'}>
-            <div className="flex justify-between items-center h-16">
+            <div className="flex justify-between items-center h-20">
               <div className="flex items-center">
                 <img 
-                  src="/resume_dj_logo.png" 
+                  src={`${process.env.PUBLIC_URL}/resume_dj_logo.png`}
                   alt="Resume DJ Logo" 
-                  className="h-8 w-auto mr-2" 
+                  className="h-20 w-auto" 
                 />
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Resume DJ
-                </h1>
               </div>
               <div>
                 <ThemeToggle />
