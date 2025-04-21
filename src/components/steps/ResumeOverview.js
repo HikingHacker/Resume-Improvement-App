@@ -68,6 +68,9 @@ const ResumeOverview = ({ onBack, onNext }) => {
     <Card className="w-full shadow-md transition-colors duration-200">
       <CardHeader>
         <CardTitle className="text-xl">Resume Overview</CardTitle>
+        <CardDescription>
+          We've extracted the following from your resume:
+        </CardDescription>
       </CardHeader>
       
       <CardContent className="space-y-6">

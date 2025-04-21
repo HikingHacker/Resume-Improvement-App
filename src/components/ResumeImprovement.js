@@ -1651,6 +1651,9 @@ const ResumeImprovement = () => {
       <Card className="w-full shadow-md transition-colors duration-200">
         <CardHeader>
           <CardTitle className="text-xl">Resume Overview</CardTitle>
+          <CardDescription>
+            We've extracted the following from your resume:
+          </CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-6">
@@ -1678,7 +1681,6 @@ const ResumeImprovement = () => {
           </div>
           
           <div>
-            <p className="mb-2 text-gray-700 dark:text-gray-300">We've extracted the following from your resume:</p>
             <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-100 dark:border-primary-800">
               <div className="flex items-center mb-3">
                 <div className="bg-primary-100 dark:bg-primary-800 p-2 rounded-full mr-3">
@@ -2535,12 +2537,13 @@ const ResumeImprovement = () => {
       case 1:
         return (
           <Card className="w-full shadow-md dark:bg-gray-800">
-            <CardHeader>
-              <CardDescription className="text-center">
-                Transform your resume with AI-powered insights and improvements
-              </CardDescription>
-            </CardHeader>
-            
+          <CardHeader>
+            <CardTitle className="text-xl">Upload Resume</CardTitle>
+            <CardDescription>
+            Transform your resume with AI-powered insights and improvements
+          </CardDescription>
+          </CardHeader>
+
             <CardContent>
             
             <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-4 rounded-lg mb-6">
