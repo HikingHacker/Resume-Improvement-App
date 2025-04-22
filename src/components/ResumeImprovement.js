@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, CheckCircle, Info, Sparkles, ClipboardList, LineChart, Zap, Layers } from 'lucide-react';
+import { Upload, FileText, Download, Send, ArrowLeft, ArrowRight, AlertTriangle, PenTool, Briefcase, Calendar, Briefcase as Job, Building, CheckCircle, Info, Sparkles, ClipboardList, LineChart, Zap, Layers, HelpCircle as QuestionMarkCircleIcon, Lightbulb as LightbulbIcon } from 'lucide-react';
 import { 
   Button, 
   Input, 
@@ -1037,103 +1037,167 @@ const ResumeImprovement = () => {
                             placeholder="Edit this improved version or select a different variation above"
                           />
                         </div>
-                        <div className="flex flex-wrap gap-3">
-                          <Button
-                            onClick={() => {
-                              // Use context function to save bullet point
-                              const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
-                              
-                              if (success) {
-                                // Show a temporary success message
-                                const tempMessage = document.createElement('div');
-                                tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in';
-                                tempMessage.innerHTML = 'Bullet point updated successfully!';
-                                document.getElementById('save-button-container').appendChild(tempMessage);
+                        <div className="mt-6 bg-green-50 dark:bg-green-900/30 p-4 rounded-lg border border-green-200 dark:border-green-700 mb-4">
+                          <div className="flex items-start">
+                            <div className="bg-green-100 dark:bg-green-800 p-2 rounded-full mr-3 flex-shrink-0">
+                              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-1 flex items-center">
+                                Ready to Use Your Improved Bullet Point?
+                              </h3>
+                              <p className="text-sm text-green-800 dark:text-green-300">
+                                {additionalContexts[bulletId] && Object.values(additionalContexts[bulletId]).some(v => v.trim() !== '') 
+                                  ? "You've provided additional context! Your bullet point has been enhanced with your specific details."
+                                  : "Consider answering the questions in the amber section below for an even better result tailored to your experience."}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-4 justify-center">
+                          <div className="flex flex-wrap gap-4 justify-center">
+                            <Button
+                              onClick={() => {
+                                // Use context function to save bullet point
+                                const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
                                 
-                                // Remove the message after 3 seconds
-                                setTimeout(() => {
-                                  if (tempMessage.parentNode) {
-                                    tempMessage.parentNode.removeChild(tempMessage);
-                                  }
-                                }, 3000);
-                              }
-                            }}
-                            variant="secondary"
-                            className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Save Improved Version
-                          </Button>
+                                if (success) {
+                                  // Show a temporary success message
+                                  const tempMessage = document.createElement('div');
+                                  tempMessage.className = 'text-green-600 dark:text-green-400 text-sm mt-2 animate-fade-in text-center';
+                                  tempMessage.innerHTML = 'Bullet point updated successfully!';
+                                  document.getElementById('save-button-container').appendChild(tempMessage);
+                                  
+                                  // Remove the message after 3 seconds
+                                  setTimeout(() => {
+                                    if (tempMessage.parentNode) {
+                                      tempMessage.parentNode.removeChild(tempMessage);
+                                    }
+                                  }, 3000);
+                                }
+                              }}
+                              variant="secondary"
+                              className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white shadow-md px-5 py-5"
+                              size="lg"
+                            >
+                              <CheckCircle className="w-5 h-5 mr-2" />
+                              Save Improved Version
+                            </Button>
+                            
+                            <Button
+                              onClick={() => {
+                                // Use context function to save bullet point
+                                const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
+                                
+                                if (success) {
+                                  // Navigate to next bullet point using context function
+                                  navigateBulletPoints('next');
+                                }
+                              }}
+                              variant="primary"
+                              className="bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-600 text-white shadow-md px-5 py-5"
+                              size="lg"
+                            >
+                              <ArrowRight className="w-5 h-5 mr-2" />
+                              Save & Next Bullet
+                            </Button>
+                          </div>
                           
-                          <Button
-                            onClick={() => {
-                              // Use context function to save bullet point
-                              const success = saveBulletPoint(bulletId, improvements[bulletId].improvedBulletPoint);
-                              
-                              if (success) {
-                                // Navigate to next bullet point using context function
-                                navigateBulletPoints('next');
-                              }
-                            }}
-                            variant="primary"
-                            className="bg-primary-600 hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-600 text-white"
-                          >
-                            <ArrowRight className="w-4 h-4 mr-2" />
-                            Save & Next Bullet
-                          </Button>
+                          {improvements[bulletId]?.followUpQuestions?.length > 0 && !Object.values(additionalContexts[bulletId] || {}).some(v => v.trim() !== '') && (
+                            <Button
+                              onClick={() => {
+                                // Scroll to the follow-up questions section
+                                document.getElementById('follow-up-questions-section')?.scrollIntoView({ 
+                                  behavior: 'smooth', 
+                                  block: 'start' 
+                                });
+                              }}
+                              variant="outline"
+                              className="text-amber-600 hover:text-white dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-500 dark:hover:bg-amber-700 shadow-md px-5 py-5 transition-all duration-200 mt-2 md:mt-0"
+                              size="lg"
+                            >
+                              <LightbulbIcon className="w-5 h-5 mr-2" />
+                              Enhance with follow-up questions
+                            </Button>
+                          )}
                         </div>
-                        <div id="save-button-container" className="mt-2"></div>
+                        <div id="save-button-container" className="mt-4 mb-2 text-center"></div>
                       </div>
                       
-                      <div className="py-4">
-                        <h3 className="text-lg font-semibold text-primary-700 dark:text-primary-400 mb-2 flex items-center">
-                          <Info className="w-5 h-5 mr-2" />
-                          Reasoning
-                        </h3>
-                        <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded border border-primary-200 dark:border-primary-800 text-gray-800 dark:text-gray-200">
-                          {improvements[bulletId]?.reasoning}
+                      <div className="mt-8 pt-6 border-t border-dashed border-gray-300 dark:border-gray-600">
+                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">Understanding Your Improvement</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <h4 className="text-base font-semibold text-primary-700 dark:text-primary-400 mb-3 flex items-center">
+                              <Info className="w-5 h-5 mr-2" />
+                              Why This Improvement Works
+                            </h4>
+                            <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800 text-gray-800 dark:text-gray-200">
+                              {improvements[bulletId]?.reasoning}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="text-base font-semibold text-yellow-700 dark:text-yellow-500 mb-3 flex items-center">
+                              <AlertTriangle className="w-5 h-5 mr-2" />
+                              Areas for Further Improvement
+                            </h4>
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800 text-gray-800 dark:text-gray-200">
+                              {improvements[bulletId]?.remainingWeaknesses || "No specific weaknesses identified."}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       
-                      <div className="py-4">
-                        <h3 className="text-lg font-semibold text-yellow-700 dark:text-yellow-500 mb-2 flex items-center">
-                          <AlertTriangle className="w-5 h-5 mr-2" />
-                          Areas for Further Improvement
-                        </h3>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded border border-yellow-200 dark:border-yellow-800 text-gray-800 dark:text-gray-200">
-                          {improvements[bulletId]?.remainingWeaknesses || "No specific weaknesses identified."}
+                      <div id="follow-up-questions-section" className="pt-10 mt-10 border-t-2 border-amber-200 dark:border-amber-800">
+                        <div className="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg border border-amber-200 dark:border-amber-700 mb-6">
+                          <div className="flex items-start">
+                            <div className="bg-amber-100 dark:bg-amber-800 p-2 rounded-full mr-3 flex-shrink-0">
+                              <LightbulbIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400 mb-1 flex items-center">
+                                Enhance Your Bullet Point Further
+                              </h3>
+                              <p className="text-sm text-amber-800 dark:text-amber-300">
+                                Answer the questions below to provide additional context and get an even better AI-enhanced bullet point. This step helps the AI tailor suggestions specifically to your experience.
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="pt-4">
-                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400 mb-3 flex items-center">
-                          <ClipboardList className="w-5 h-5 mr-2" />
-                          Answer These Questions to Improve Further
-                        </h3>
                         
                         {showFollowUpForBullets[bulletId] && improvements[bulletId]?.followUpQuestions ? (
                           <div className="space-y-4">
                             {improvements[bulletId].followUpQuestions.map((question, index) => (
-                              <div key={index} className="bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
-                                <p className="text-gray-800 dark:text-gray-200 mb-2">{question}</p>
+                              <div key={index} className="bg-gray-50 dark:bg-gray-800 p-5 rounded-lg border border-amber-200 dark:border-amber-700 transition-all duration-200 hover:shadow-md mb-5">
+                                <h4 className="font-medium text-amber-700 dark:text-amber-400 mb-2 flex items-center">
+                                  <QuestionMarkCircleIcon className="w-4 h-4 mr-2" />
+                                  Question {index + 1}:
+                                </h4>
+                                <p className="text-gray-800 dark:text-gray-200 mb-3 font-medium">{question}</p>
                                 <Textarea
                                   label="Your response"
-                                  placeholder="Provide additional context..."
+                                  placeholder="Provide additional context for better results..."
                                   value={additionalContexts[bulletId]?.[index] || ""}
                                   onChange={(e) => handleAdditionalContextChange(index, e.target.value)}
                                   rows={2}
+                                  className="border-amber-200 dark:border-amber-700 focus:ring-amber-500 focus:border-amber-500"
                                 />
                               </div>
                             ))}
-                            <Button 
-                              onClick={handleAdditionalContextSubmit} 
-                              variant="secondary"
-                              loading={loading.improve}
-                              className="mt-2"
-                            >
-                              <Send className="w-4 h-4 mr-2" />
-                              {loading.improve ? 'Processing...' : 'Submit Additional Context'}
-                            </Button>
+                            <div className="flex justify-center mt-8 mb-4">
+                              <Button 
+                                onClick={handleAdditionalContextSubmit} 
+                                variant="secondary"
+                                loading={loading.improve}
+                                className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-600 shadow-md px-6 py-6"
+                                size="lg"
+                              >
+                                <Sparkles className="w-5 h-5 mr-2" />
+                                {loading.improve ? 'Generating Improved Version...' : 'Generate Enhanced Version With Your Context'}
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
