@@ -20,6 +20,8 @@ const ActionTypes = {
   SET_EDITING_JOB: 'SET_EDITING_JOB',
   SET_EDITING_BULLET_INFO: 'SET_EDITING_BULLET_INFO',
   SET_EDITED_BULLET: 'SET_EDITED_BULLET',
+  START_REQUEST: 'START_REQUEST',
+  COMPLETE_REQUEST: 'COMPLETE_REQUEST',
   RESET_STATE: 'RESET_STATE',
 };
 
@@ -44,6 +46,9 @@ const initialState = {
   showFollowUpForBullets: {},
   savedBullets: {},
   originalBullets: {},
+  
+  // Request tracking state for deduplication
+  inProgressRequests: {}, // Track in-progress requests to handle StrictMode double invocation
   
   // Editing state
   editingJobIndex: null,
@@ -100,6 +105,26 @@ function resumeReducer(state, action) {
     case ActionTypes.SET_ORIGINAL_BULLETS:
       return { ...state, originalBullets: payload };
     
+    // Request tracking actions
+    case ActionTypes.START_REQUEST:
+      return { 
+        ...state, 
+        inProgressRequests: { 
+          ...state.inProgressRequests, 
+          [payload.requestId]: {
+            timestamp: Date.now(),
+            promise: payload.promise
+          }
+        } 
+      };
+    case ActionTypes.COMPLETE_REQUEST:
+      const updatedRequests = { ...state.inProgressRequests };
+      delete updatedRequests[payload.requestId];
+      return { 
+        ...state, 
+        inProgressRequests: updatedRequests
+      };
+    
     // Editing actions
     case ActionTypes.SET_EDITING_JOB_INDEX:
       return { ...state, editingJobIndex: payload };
@@ -148,6 +173,14 @@ const actionCreators = {
   setSavedBullets: (bullets) => ({ type: ActionTypes.SET_SAVED_BULLETS, payload: bullets }),
   setOriginalBullets: (bullets) => ({ type: ActionTypes.SET_ORIGINAL_BULLETS, payload: bullets }),
   setResumeEdited: (edited) => ({ type: ActionTypes.SET_RESUME_EDITED, payload: edited }),
+  startRequest: (requestId, promise) => ({ 
+    type: ActionTypes.START_REQUEST, 
+    payload: { requestId, promise } 
+  }),
+  completeRequest: (requestId) => ({ 
+    type: ActionTypes.COMPLETE_REQUEST, 
+    payload: { requestId } 
+  }),
   setEditingJobIndex: (index) => ({ type: ActionTypes.SET_EDITING_JOB_INDEX, payload: index }),
   setEditingJob: (job) => ({ type: ActionTypes.SET_EDITING_JOB, payload: job }),
   setEditingBulletInfo: (info) => ({ type: ActionTypes.SET_EDITING_BULLET_INFO, payload: info }),
@@ -371,52 +404,119 @@ export function ResumeProvider({ children }) {
     return structuredData;
   };
 
+  // Helper function to create a shared promise for deduplication
+  const createSharedBulletPromise = useCallback(async (bulletId, promiseFn) => {
+    // Check if we already have an in-progress request for this bullet
+    if (state.inProgressRequests[bulletId]) {
+      console.log(`Reusing in-progress request for bullet ${bulletId}`);
+      return state.inProgressRequests[bulletId].promise;
+    }
+    
+    // Create a new promise that will wrap our underlying API promise
+    // This allows us to properly handle both successful and error cases
+    const wrappedPromise = new Promise((resolve, reject) => {
+      // Execute the actual async operation
+      const originalPromise = promiseFn();
+      
+      originalPromise
+        .then(result => {
+          console.log(`Request for bullet ${bulletId} completed successfully`);
+          resolve(result);
+        })
+        .catch(error => {
+          console.error(`Request for bullet ${bulletId} failed:`, error);
+          reject(error);
+        })
+        .finally(() => {
+          // Always clean up the request from tracking
+          dispatch(actionCreators.completeRequest(bulletId));
+        });
+    });
+    
+    // Store the wrapped promise in state for deduplication
+    dispatch(actionCreators.startRequest(bulletId, wrappedPromise));
+    
+    return wrappedPromise;
+  }, [state.inProgressRequests, dispatch]);
+
   // Function to get bullet point improvements
-  const handleBulletPointImprovement = useCallback(async () => {
+  const handleBulletPointImprovement = useCallback(async (customRequestId = null) => {
     const currentBulletId = getCurrentBulletId();
     if (!currentBulletId) return null;
     
+    // Generate a request ID - use custom ID if provided (for new variations)
+    // Otherwise use the bulletId for standard improvements
+    const requestId = customRequestId || currentBulletId;
+    
+    // For standard requests (not variations/context submissions):
     // Check if we already have data for this bullet point
-    const existingImprovement = state.improvements[currentBulletId];
-    if (existingImprovement && existingImprovement.success) {
-      console.log(`Using existing improvement data for bullet ${currentBulletId}`);
-      return existingImprovement;
+    if (!customRequestId) {
+      const existingImprovement = state.improvements[currentBulletId];
+      if (existingImprovement && existingImprovement.success) {
+        console.log(`Using existing improvement data for bullet ${currentBulletId}`);
+        return existingImprovement;
+      }
     }
     
+    // Check if this exact request is already being processed (StrictMode protection)
+    if (state.inProgressRequests[requestId]) {
+      console.log(`Request ${requestId} already in progress, reusing request`);
+      return state.inProgressRequests[requestId].promise;
+    }
+    
+    // Extract data needed for the request outside the promise function
     const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
     
-    try {
-      // Include job context in the additional context
-      const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-      const userContext = Object.values(state.additionalContexts[currentBulletId] || {}).join(' ');
-      const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-      
-      // Pass the bulletId for bullet-specific loading state tracking
-      const suggestions = await resumeService.getAISuggestions(
-        currentBullet, 
-        contextToSend,
-        currentBulletId // Pass the bulletId for deduplication
-      );
-      
-      if (suggestions) {
-        dispatch({ 
-          type: ActionTypes.UPDATE_IMPROVEMENT, 
-          payload: { bulletId: currentBulletId, improvement: suggestions }
-        });
-        
-        dispatch({ 
-          type: ActionTypes.SET_SHOW_FOLLOW_UP, 
-          payload: { ...state.showFollowUpForBullets, [currentBulletId]: true }
-        });
-        
-        return suggestions;
+    // Include job context in the additional context
+    const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
+    const userContext = Object.values(state.additionalContexts[currentBulletId] || {}).join(' ');
+    const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
+    
+    // Log what type of request this is
+    if (customRequestId) {
+      if (customRequestId.includes('variation')) {
+        console.log(`Generating new variation for bullet ${currentBulletId} with request ID ${customRequestId}`);
+      } else if (customRequestId.includes('context')) {
+        console.log(`Submitting additional context for bullet ${currentBulletId} with request ID ${customRequestId}`);
+      } else {
+        console.log(`Custom request for bullet ${currentBulletId} with ID ${customRequestId}`);
       }
-      return null;
-    } catch (error) {
-      console.error("Error getting AI suggestions:", error);
-      return null;
+    } else {
+      console.log(`Standard improvement request for bullet ${currentBulletId}`);
     }
+    
+    // Create the shared promise using the appropriate request ID
+    return createSharedBulletPromise(requestId, async () => {
+      try {
+        console.log(`Starting improvement request for bullet ${currentBulletId}`);
+        
+        // Pass the bulletId for bullet-specific loading state tracking
+        const suggestions = await resumeService.getAISuggestions(
+          currentBullet, 
+          contextToSend,
+          currentBulletId // Pass the bulletId for service-level deduplication
+        );
+        
+        if (suggestions) {
+          dispatch({ 
+            type: ActionTypes.UPDATE_IMPROVEMENT, 
+            payload: { bulletId: currentBulletId, improvement: suggestions }
+          });
+          
+          dispatch({ 
+            type: ActionTypes.SET_SHOW_FOLLOW_UP, 
+            payload: { ...state.showFollowUpForBullets, [currentBulletId]: true }
+          });
+          
+          return suggestions;
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error getting AI suggestions for bullet ${currentBulletId}:`, error);
+        return null;
+      }
+    });
   }, [
     state.resumeData, 
     state.currentJobIndex, 
@@ -424,8 +524,10 @@ export function ResumeProvider({ children }) {
     state.additionalContexts, 
     state.showFollowUpForBullets,
     state.improvements,
+    state.inProgressRequests,
     resumeService,
-    getCurrentBulletId
+    getCurrentBulletId,
+    createSharedBulletPromise
   ]);
 
   // Function to handle additional context for a bullet point
@@ -450,43 +552,59 @@ export function ResumeProvider({ children }) {
     const bulletId = getCurrentBulletId();
     if (!bulletId) return null;
     
+    // Generate a unique request ID for this context submission
+    // This allows multiple context submissions for the same bullet
+    const contextRequestId = `${bulletId}-context-${Date.now()}`;
+    
+    // Check if this bullet is already being processed (StrictMode protection)
+    if (state.inProgressRequests[contextRequestId]) {
+      console.log(`Context submission already in progress for ${contextRequestId}, reusing request`);
+      return state.inProgressRequests[contextRequestId].promise;
+    }
+    
+    // Extract data needed for the request outside the promise function
     const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
     
-    try {
-      console.log(`Submitting additional context for bullet ${bulletId}`);
-      
-      // Include job context in the additional context
-      const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-      const userContext = Object.values(state.additionalContexts[bulletId] || {}).join(' ');
-      const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-      
-      // Pass the bulletId for bullet-specific loading state tracking
-      const newSuggestions = await resumeService.getAISuggestions(
-        currentBullet, 
-        contextToSend,
-        bulletId // Pass the bulletId for deduplication
-      );
-      
-      if (newSuggestions) {
-        dispatch({ 
-          type: ActionTypes.UPDATE_IMPROVEMENT, 
-          payload: { bulletId, improvement: newSuggestions }
-        });
-        return newSuggestions;
+    // Include job context in the additional context
+    const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
+    const userContext = Object.values(state.additionalContexts[bulletId] || {}).join(' ');
+    const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
+    
+    // Create the shared promise for this context submission
+    return createSharedBulletPromise(contextRequestId, async () => {
+      try {
+        console.log(`Starting context submission for bullet ${bulletId}`);
+        
+        // Pass the bulletId for bullet-specific loading state tracking
+        const newSuggestions = await resumeService.getAISuggestions(
+          currentBullet, 
+          contextToSend,
+          bulletId // Pass the bulletId for service-level deduplication
+        );
+        
+        if (newSuggestions) {
+          dispatch({ 
+            type: ActionTypes.UPDATE_IMPROVEMENT, 
+            payload: { bulletId, improvement: newSuggestions }
+          });
+          return newSuggestions;
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error getting updated AI suggestions for bullet ${bulletId}:`, error);
+        return null;
       }
-      return null;
-    } catch (error) {
-      console.error("Error getting updated AI suggestions:", error);
-      return null;
-    }
+    });
   }, [
     state.resumeData, 
     state.currentJobIndex, 
     state.currentBulletIndex, 
     state.additionalContexts,
+    state.inProgressRequests,
     resumeService,
-    getCurrentBulletId
+    getCurrentBulletId,
+    createSharedBulletPromise
   ]);
 
   // Function to navigate between bullet points
@@ -803,6 +921,34 @@ export function ResumeProvider({ children }) {
     
     return count;
   }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex]);
+
+  // Clean up stale in-progress requests
+  useEffect(() => {
+    // Set up a periodic cleanup timer
+    const cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      const MAX_REQUEST_AGE = 30000; // 30 seconds
+      let hasStaleRequests = false;
+
+      // Check for stale requests
+      Object.entries(state.inProgressRequests).forEach(([requestId, requestInfo]) => {
+        const age = now - requestInfo.timestamp;
+        if (age > MAX_REQUEST_AGE) {
+          console.log(`Cleaning up stale request: ${requestId} (${age}ms old)`);
+          hasStaleRequests = true;
+          dispatch(actionCreators.completeRequest(requestId));
+        }
+      });
+
+      // Only log if we actually cleaned something
+      if (hasStaleRequests) {
+        console.log("Cleaned up stale requests");
+      }
+    }, 10000); // Run every 10 seconds
+    
+    // Clean up timer on unmount
+    return () => clearInterval(cleanupTimer);
+  }, [state.inProgressRequests, dispatch]);
 
   // Save state to localStorage whenever it changes
   useEffect(() => {

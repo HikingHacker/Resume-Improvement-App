@@ -118,6 +118,10 @@ const ResumeImprovement = () => {
   const [editingBulletInfo, setEditingBulletInfo] = React.useState({ jobIndex: null, bulletIndex: null });
   const [editedBullet, setEditedBullet] = React.useState("");
 
+  // Create a ref to track in-progress analytics requests to prevent duplicates from React.StrictMode
+  const analyticsRequestInProgress = React.useRef(false);
+  const analyticsRequestPromise = React.useRef(null);
+  
   // Function to fetch AI-powered analytics and recommendations
   const getAnalytics = React.useCallback(async (force = false) => {
     // Skip if we already have analytics data and not forcing a refresh
@@ -126,15 +130,28 @@ const ResumeImprovement = () => {
       return aiRecommendations;
     }
     
+    // If a request is already in progress, return the existing promise
+    if (analyticsRequestInProgress.current && analyticsRequestPromise.current) {
+      console.log("Analytics request already in progress, reusing existing request");
+      return analyticsRequestPromise.current;
+    }
+    
+    // Mark that a request is now in progress
+    analyticsRequestInProgress.current = true;
+    
     try {
       // Use context startOperation method instead of direct setLoading
       startOperation("analytics");
       
-      const analyticsData = await getImprovementAnalytics(
+      // Create the request and store it in the ref
+      analyticsRequestPromise.current = getImprovementAnalytics(
         resumeData, 
         improvements,
         savedBullets
       );
+      
+      // Wait for the analytics data
+      const analyticsData = await analyticsRequestPromise.current;
       
       if (analyticsData && analyticsData.success) {
         setAiRecommendations(analyticsData);
@@ -152,6 +169,12 @@ const ResumeImprovement = () => {
     } finally {
       // Use context endOperation method instead of direct setLoading
       endOperation("analytics");
+      
+      // Clean up after a timeout to allow for potential React.StrictMode effects
+      setTimeout(() => {
+        analyticsRequestInProgress.current = false;
+        analyticsRequestPromise.current = null;
+      }, 500);
     }
   }, [startOperation, getImprovementAnalytics, resumeData, improvements, savedBullets, setErrors, endOperation, aiRecommendations]);
   
@@ -784,26 +807,9 @@ const ResumeImprovement = () => {
                                 // First update the current selections
                                 setCurrentBulletIndex(bulletIndex);
                                 
-                                // Store the current job and bullet index in local variables for the callback
-                                const thisJobIndex = currentJobIndex; // This is already set from the job selection
-                                const thisBulletIndex = bulletIndex;
-                                
-                                // Get the bullet ID for this specific bullet point
-                                const thisBulletId = getBulletId(thisJobIndex, thisBulletIndex);
-                                
-                                // We'll attempt auto-loading, but also provide the button as a fallback
-                                if (!improvements[thisBulletId]) {
-                                  // Use setTimeout to ensure state updates first
-                                  setTimeout(() => {
-                                    // At this point, currentJobIndex and currentBulletIndex should be updated
-                                    try {
-                                      handleBulletPointImprovement();
-                                    } catch (error) {
-                                      console.error("Auto-trigger failed:", error);
-                                      // The button will still be available if this fails
-                                    }
-                                  }, 100);
-                                }
+                                // Don't automatically trigger the improvement
+                                // Instead, require the user to click the "Get AI Suggestions" button
+                                // This prevents React.StrictMode from causing duplicate requests
                               }}
                             >
                               <div className="flex items-start">
@@ -858,18 +864,8 @@ const ResumeImprovement = () => {
               </div>
               <div className="p-5 divide-y divide-gray-200 dark:divide-gray-700">
               {currentJobIndex !== null && currentBulletIndex !== null ? (
-                // Auto-trigger AI suggestions when bullet is displayed (if needed)
-                (() => {
-                  const bulletId = getCurrentBulletId();
-                  // Only trigger if we don't already have improvements for this bullet and not currently loading
-                  if (bulletId && !improvements[bulletId] && !loading.improve) {
-                    // Use requestAnimationFrame for better timing after render
-                    requestAnimationFrame(() => {
-                      handleBulletPointImprovement();
-                    });
-                  }
-                  return null;
-                })(),
+                // We've removed the auto-trigger here since it was causing duplicate requests with StrictMode
+                // Instead we'll rely on the bullet point selection click handler to trigger the improvement
                 <>
                   <div className="pb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Original Bullet Point</h3>
@@ -894,7 +890,11 @@ const ResumeImprovement = () => {
                     {/* Always keep the manual button as a fallback */}
                     {!improvements[bulletId] && !loading.improve && (
                       <Button 
-                        onClick={triggerBulletImprovement} 
+                        onClick={() => {
+                          // The deduplication system will handle duplicate requests
+                          // Use the standard bulletId as request ID
+                          handleBulletPointImprovement();
+                        }} 
                         variant="primary"
                         className="mt-4"
                       >
@@ -920,16 +920,20 @@ const ResumeImprovement = () => {
                           </h3>
                           <Button
                             onClick={() => {
-                              // Clear existing improvements and regenerate them
+                              // Generate new variations by creating a unique request ID
                               if (currentJobIndex !== null && currentBulletIndex !== null) {
+                                // Create a timestamp-based variation ID to prevent deduplication
+                                const variationRequestId = `${bulletId}-variation-${Date.now()}`;
+                                
                                 // Use context functions directly
                                 startOperation('improve');
                                 
-                                // Use update improvement from context to remove the current bullet
+                                // Clear the existing improvements first to show loading state
                                 updateImprovement(bulletId, null);
                                 
-                                // Trigger generation after a short delay to ensure state is updated
-                                setTimeout(() => triggerBulletImprovement(), 100);
+                                // Call for new variations with the specific variation ID
+                                // This ensures we get a fresh request even with deduplication enabled
+                                handleBulletPointImprovement(variationRequestId);
                               }
                             }}
                             variant="outline"
@@ -2775,13 +2779,6 @@ const ResumeImprovement = () => {
 
   useTheme(); // We need the theme context but don't use its properties
   
-  // Use effect to load analytics data when arriving at step 3.5
-  React.useEffect(() => {
-    if (step === 3.5 && !aiRecommendations && !loading.analytics) {
-      getAnalytics();
-    }
-  }, [step, aiRecommendations, loading.analytics, getAnalytics]);
-
   // Determine which steps should be disabled
   const disabledSteps = () => {
     const disabledArr = [];

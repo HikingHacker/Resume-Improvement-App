@@ -61,10 +61,43 @@ function checkRequestStatus(requestId) {
 }
 
 /**
- * Register a request as in-progress
+ * Creates a shared promise that can be reused for duplicate requests
+ * 
+ * @param {function} promiseFn - The function that returns a promise
+ * @param {string} requestId - The ID to track this request
+ * @returns {Promise} - A shared promise that resolves to the result
  */
-function registerPendingRequest(requestId) {
-  pendingRequests.set(requestId, Date.now());
+function createSharedPromise(promiseFn, requestId) {
+  // Create a promise that we can reuse for duplicate requests
+  const promise = promiseFn();
+  
+  // Register this promise so it can be reused by duplicate requests
+  registerPendingRequest(requestId, promise);
+  
+  // When the promise resolves or rejects, mark the request as completed
+  promise
+    .then(result => {
+      completeRequest(requestId, true, { data: result });
+      return result;
+    })
+    .catch(error => {
+      completeRequest(requestId, false);
+      throw error;
+    });
+  
+  return promise;
+}
+
+/**
+ * Register a request as in-progress
+ * @param {string} requestId - The ID of the request
+ * @param {Promise} promise - Optional promise to store with the request
+ */
+function registerPendingRequest(requestId, promise = null) {
+  pendingRequests.set(requestId, {
+    timestamp: Date.now(),
+    promise: promise
+  });
 }
 
 /**
@@ -96,9 +129,9 @@ function completeRequest(requestId, success = true, result = null) {
 // Cleanup interval for pendingRequests to prevent memory leaks (abandoned requests)
 setInterval(() => {
   const now = Date.now();
-  for (const [id, timestamp] of pendingRequests.entries()) {
+  for (const [id, entry] of pendingRequests.entries()) {
     // Clean up requests older than 30 seconds (likely abandoned/failed)
-    if (now - timestamp > 30000) {
+    if (now - entry.timestamp > 30000) {
       pendingRequests.delete(id);
     }
   }
@@ -429,7 +462,15 @@ async function apiRequest(endpoint, options = {}) {
     
     if (inProgress) {
       console.log(`Duplicate API request prevented for ${method} ${endpoint}`);
-      // Wait for the in-progress request to complete
+      
+      // Get the pending request and create a promise that will resolve when it completes
+      const pendingRequest = pendingRequests.get(deterministicRequestId);
+      if (typeof pendingRequest === 'object' && pendingRequest.promise) {
+        console.log(`Reusing existing promise for ${method} ${endpoint}`);
+        return pendingRequest.promise;
+      }
+      
+      // If we don't have the promise stored (legacy case), wait for the request to complete
       return new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
           if (!pendingRequests.has(deterministicRequestId)) {
@@ -464,9 +505,6 @@ async function apiRequest(endpoint, options = {}) {
     }
   }
   
-  // Mark this request as in progress
-  registerPendingRequest(deterministicRequestId);
-
   // Apply rate limiting if required
   if (useRateLimit) {
     await rateLimiter.acquireToken();
@@ -474,145 +512,139 @@ async function apiRequest(endpoint, options = {}) {
 
   // Only use mock data if explicitly configured
   if (API_CONFIG.useMockData) {
-    try {
-      // Use mock implementation
-      const mockResult = await mockApiRequest(endpoint, { method, body });
-      completeRequest(deterministicRequestId, true, mockResult);
-      return mockResult;
-    } catch (error) {
-      completeRequest(deterministicRequestId, false);
-      throw error;
-    }
+    return createSharedPromise(async () => {
+      return await mockApiRequest(endpoint, { method, body });
+    }, deterministicRequestId);
   }
-
-  // For real API calls, implement retry logic
-  let attempts = 0;
-  let lastError = null;
-  const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-
-  console.log(`[${requestId}] API Request: ${method} ${endpoint}`);
-  const startTime = Date.now();
-
-  while (attempts < API_CONFIG.retryAttempts) {
-    try {
-      // Set up request timeout with AbortController
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.warn(`[${requestId}] Request timeout after ${timeout}ms`);
-      }, timeout);
-
-      // Make the API request
-      const response = await fetch(`${API_CONFIG.baseUrl}${endpoint}`, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-ID': requestId,
-          ...headers,
-        },
-        body: body ? JSON.stringify(body) : null,
-        signal: controller.signal,
-      });
-
-      // Clear the timeout
-      clearTimeout(timeoutId);
-
-      // Handle non-successful responses
-      if (!response.ok) {
-        let errorMessage;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData?.message || `API request failed with status ${response.status}`;
-        } catch (parseError) {
-          errorMessage = `API request failed with status ${response.status}`;
-        }
-        
-        // Log error details
-        console.error(`[${requestId}] API Error:`, {
-          status: response.status,
-          statusText: response.statusText,
-          endpoint,
-          message: errorMessage
+  
+  // For real API requests, create a shared promise
+  return createSharedPromise(async () => {
+    // For real API calls, implement retry logic
+    let attempts = 0;
+    let lastError = null;
+    const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  
+    console.log(`[${requestId}] API Request: ${method} ${endpoint}`);
+    const startTime = Date.now();
+  
+    while (attempts < API_CONFIG.retryAttempts) {
+      try {
+        // Set up request timeout with AbortController
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          console.warn(`[${requestId}] Request timeout after ${timeout}ms`);
+        }, timeout);
+  
+        // Make the API request
+        const response = await fetch(`${API_CONFIG.baseUrl}${endpoint}`, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId,
+            ...headers,
+          },
+          body: body ? JSON.stringify(body) : null,
+          signal: controller.signal,
         });
-        
-        // Special case for 5xx errors - retry with backoff
-        if (response.status >= 500) {
-          // Get retry delay from headers if available, or use exponential backoff
-          let retryAfter = response.headers.get('retry-after');
-          let delay;
-          
-          if (retryAfter) {
-            delay = parseInt(retryAfter, 10) * 1000; // Convert to ms
-          } else {
-            // Exponential backoff with jitter
-            const jitter = Math.random() * 300;
-            delay = Math.min(API_CONFIG.retryDelay * Math.pow(2, attempts) + jitter, 15000);
+  
+        // Clear the timeout
+        clearTimeout(timeoutId);
+  
+        // Handle non-successful responses
+        if (!response.ok) {
+          let errorMessage;
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData?.message || `API request failed with status ${response.status}`;
+          } catch (parseError) {
+            errorMessage = `API request failed with status ${response.status}`;
           }
           
-          console.log(`[${requestId}] Server error (${response.status}), retrying after ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          attempts++;
-          continue;
+          // Log error details
+          console.error(`[${requestId}] API Error:`, {
+            status: response.status,
+            statusText: response.statusText,
+            endpoint,
+            message: errorMessage
+          });
+          
+          // Special case for 5xx errors - retry with backoff
+          if (response.status >= 500) {
+            // Get retry delay from headers if available, or use exponential backoff
+            let retryAfter = response.headers.get('retry-after');
+            let delay;
+            
+            if (retryAfter) {
+              delay = parseInt(retryAfter, 10) * 1000; // Convert to ms
+            } else {
+              // Exponential backoff with jitter
+              const jitter = Math.random() * 300;
+              delay = Math.min(API_CONFIG.retryDelay * Math.pow(2, attempts) + jitter, 15000);
+            }
+            
+            console.log(`[${requestId}] Server error (${response.status}), retrying after ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempts++;
+            continue;
+          }
+          
+          throw new Error(errorMessage);
+        }
+  
+        // Parse response
+        let responseData;
+        try {
+          responseData = await response.json();
+        } catch (error) {
+          console.error(`[${requestId}] Error parsing response:`, error);
+          throw new Error('Invalid response format from server');
         }
         
-        throw new Error(errorMessage);
-      }
-
-      // Parse response
-      let responseData;
-      try {
-        responseData = await response.json();
-      } catch (error) {
-        console.error(`[${requestId}] Error parsing response:`, error);
-        throw new Error('Invalid response format from server');
-      }
-      
-      const duration = Date.now() - startTime;
-      console.log(`[${requestId}] API Response: ${method} ${endpoint} (${duration}ms)`);
-      
-      // Handle 202 Accepted responses for long-running processes (async processing)
-      if (response.status === 202 && responseData.requestId && responseData.statusEndpoint) {
-        if (longRunning) {
-          console.log(`[${requestId}] Long-running task started with ID: ${responseData.requestId}`);
-          return await pollRequestStatus(responseData.requestId, responseData.statusEndpoint, { onPollStatus });
-        } else {
-          // If caller doesn't expect long-running, return the initial response
-          console.log(`[${requestId}] Returning 202 Accepted response without polling`);
-          return responseData;
+        const duration = Date.now() - startTime;
+        console.log(`[${requestId}] API Response: ${method} ${endpoint} (${duration}ms)`);
+        
+        // Handle 202 Accepted responses for long-running processes (async processing)
+        if (response.status === 202 && responseData.requestId && responseData.statusEndpoint) {
+          if (longRunning) {
+            console.log(`[${requestId}] Long-running task started with ID: ${responseData.requestId}`);
+            return await pollRequestStatus(responseData.requestId, responseData.statusEndpoint, { onPollStatus });
+          } else {
+            // If caller doesn't expect long-running, return the initial response
+            console.log(`[${requestId}] Returning 202 Accepted response without polling`);
+            return responseData;
+          }
         }
+        
+        // Regular successful response
+        return responseData;
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        lastError = error;
+        attempts++;
+        
+        // Log the error with request context
+        console.error(`[${requestId}] Request failed (attempt ${attempts}/${API_CONFIG.retryAttempts}, ${duration}ms):`, 
+          error.name === 'AbortError' ? 'Request timeout' : error.message
+        );
+        
+        // Don't retry if we've reached the max attempts
+        if (attempts >= API_CONFIG.retryAttempts) {
+          console.error(`[${requestId}] Max retry attempts reached`);
+          break;
+        }
+        
+        // Implement exponential backoff with jitter for retries
+        const jitter = Math.random() * 300;
+        const backoffTime = (API_CONFIG.retryDelay * Math.pow(2, attempts - 1)) + jitter;
+        console.warn(`[${requestId}] Retrying in ${Math.round(backoffTime)}ms...`);
+        await delay(backoffTime);
       }
-      
-      // Regular successful response
-      completeRequest(deterministicRequestId, true, { data: responseData });
-      return responseData;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      lastError = error;
-      attempts++;
-      
-      // Log the error with request context
-      console.error(`[${requestId}] Request failed (attempt ${attempts}/${API_CONFIG.retryAttempts}, ${duration}ms):`, 
-        error.name === 'AbortError' ? 'Request timeout' : error.message
-      );
-      
-      // Don't retry if we've reached the max attempts
-      if (attempts >= API_CONFIG.retryAttempts) {
-        console.error(`[${requestId}] Max retry attempts reached`);
-        completeRequest(deterministicRequestId, false);
-        break;
-      }
-      
-      // Implement exponential backoff with jitter for retries
-      const jitter = Math.random() * 300;
-      const backoffTime = (API_CONFIG.retryDelay * Math.pow(2, attempts - 1)) + jitter;
-      console.warn(`[${requestId}] Retrying in ${Math.round(backoffTime)}ms...`);
-      await delay(backoffTime);
     }
-  }
-
-  // If we've exhausted all retries, mark the request as failed and throw the error
-  completeRequest(deterministicRequestId, false);
-  throw lastError;
+  
+    // If we've exhausted all retries, throw the last error
+    throw lastError;
+  }, deterministicRequestId);
 }
 
 /**

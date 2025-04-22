@@ -133,31 +133,48 @@ export const useResumeService = (apiService = ResumeAPI) => {
    * @param {string} additionalContext - Additional context for the improvement
    * @param {string} bulletId - Unique identifier for this bullet point (for deduplication)
    */
+  // Create a request tracking system using a ref that persists between renders
+  const pendingBulletRequests = { map: new Map() };
+  
   const getAISuggestions = useCallback(async (bulletPoint, additionalContext = "", bulletId = null) => {
     // Use bullet-level tracking if a bulletId is provided
     const operationKey = OPERATION_TYPES.IMPROVE;
+    const requestKey = bulletId || `bullet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
-    // First check if this specific bullet is already being processed
-    if (bulletId && loading.bulletMap[bulletId]) {
-      console.log(`Improvement already in progress for bullet ${bulletId}, skipping duplicate request`);
-      return null;
+    // First check if we already have a request in progress for this bullet
+    if (bulletId && pendingBulletRequests.map.has(requestKey)) {
+      console.log(`[useResumeService] Improvement already in progress for bullet ${requestKey}, reusing promise`);
+      return pendingBulletRequests.map.get(requestKey);
     }
     
     // Start the operation, tracking both the global state and bullet-specific state
     startOperation(operationKey, bulletId);
     
-    try {
-      console.log(`Requesting improvement for bullet ${bulletId || 'unknown'}`);
-      const result = await apiService.getAISuggestions(bulletPoint, additionalContext);
-      return result;
-    } catch (error) {
-      console.error(`Error improving bullet ${bulletId || 'unknown'}:`, error);
-      endOperation(operationKey, error, bulletId);
-      return null;
-    } finally {
-      endOperation(operationKey, null, bulletId);
-    }
-  }, [startOperation, endOperation, apiService, loading]);
+    // Create a wrapped promise that we can store and reuse
+    const requestPromise = new Promise(async (resolve, reject) => {
+      try {
+        console.log(`[useResumeService] Requesting improvement for bullet ${requestKey}`);
+        const result = await apiService.getAISuggestions(bulletPoint, additionalContext);
+        resolve(result);
+      } catch (error) {
+        console.error(`[useResumeService] Error improving bullet ${requestKey}:`, error);
+        endOperation(operationKey, error, bulletId);
+        reject(error);
+      } finally {
+        // Clean up tracking
+        setTimeout(() => {
+          pendingBulletRequests.map.delete(requestKey);
+        }, 500); // Short delay to handle StrictMode double invocation
+        
+        endOperation(operationKey, null, bulletId);
+      }
+    });
+    
+    // Store the promise for deduplication
+    pendingBulletRequests.map.set(requestKey, requestPromise);
+    
+    return requestPromise;
+  }, [startOperation, endOperation, apiService]);
 
   /**
    * Get AI-powered comprehensive resume analysis
@@ -242,8 +259,20 @@ export const useResumeService = (apiService = ResumeAPI) => {
   /**
    * Get AI-powered improvement analytics and recommendations
    * Supports polling for long-running operations with progress updates
+   * Enhanced with deduplication for React.StrictMode
    */
+  // Create a reference to track in-progress analytics requests
+  const analyticsRequestRef = { inProgress: false, promise: null };
+  
   const getImprovementAnalytics = useCallback(async (resumeData, improvements, savedBullets) => {
+    // Check if request is already in progress, if so, return the existing promise
+    if (analyticsRequestRef.inProgress && analyticsRequestRef.promise) {
+      console.log("[useResumeService] Analytics request already in progress, reusing promise");
+      return analyticsRequestRef.promise;
+    }
+    
+    // Mark that we're starting a request and track loading state
+    analyticsRequestRef.inProgress = true;
     startOperation(OPERATION_TYPES.ANALYTICS);
     
     try {
@@ -262,16 +291,31 @@ export const useResumeService = (apiService = ResumeAPI) => {
         }
       };
       
-      // Call the API with polling enabled for this long-running operation
-      return await apiService.getImprovementAnalytics(resumeData, improvements, savedBullets, {
-        longRunning: true,
-        onStatusUpdate
-      });
+      // Create the promise and store it
+      analyticsRequestRef.promise = apiService.getImprovementAnalytics(
+        resumeData, 
+        improvements, 
+        savedBullets, 
+        {
+          longRunning: true,
+          onStatusUpdate
+        }
+      );
+      
+      // Wait for the promise to resolve
+      const result = await analyticsRequestRef.promise;
+      return result;
     } catch (error) {
       console.error("Error in getImprovementAnalytics:", error);
       endOperation(OPERATION_TYPES.ANALYTICS, error);
       return null;
     } finally {
+      // Clean up - important for future requests
+      setTimeout(() => {
+        analyticsRequestRef.inProgress = false;
+        analyticsRequestRef.promise = null;
+      }, 500); // Short delay to handle potential React.StrictMode double invocation
+      
       endOperation(OPERATION_TYPES.ANALYTICS);
     }
   }, [startOperation, endOperation, apiService, setLoading]);
