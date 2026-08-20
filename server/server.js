@@ -80,7 +80,7 @@ const CLAUDE_CONFIG = {
   apiKey: process.env.ANTHROPIC_API_KEY,
   baseUrl: 'https://api.anthropic.com',
   apiVersion: '2023-06-01',
-  model: process.env.CLAUDE_MODEL || 'claude-3-sonnet-20240229',
+  model: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
   maxTokens: 1000,
   temperature: 0.7,
 };
@@ -153,7 +153,6 @@ async function callClaudeAPI(options) {
           body: JSON.stringify({
             model: CLAUDE_CONFIG.model,
             max_tokens: maxTokens,
-            temperature: temperature,
             system: systemPrompt,
             messages: [
               { role: 'user', content: prompt }
