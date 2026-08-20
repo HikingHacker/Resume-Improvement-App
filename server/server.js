@@ -81,7 +81,7 @@ const CLAUDE_CONFIG = {
   baseUrl: 'https://api.anthropic.com',
   apiVersion: '2023-06-01',
   model: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
-  maxTokens: 1000,
+  maxTokens: 8192,
   temperature: 0.7,
 };
 
@@ -218,6 +218,10 @@ async function callClaudeAPI(options) {
         });
 
         const data = await response.json();
+
+        if (data.stop_reason === 'max_tokens') {
+          console.warn(`[${requestId}] Claude response truncated (stop_reason=max_tokens)`);
+        }
         
         // Request succeeded
         updateRequestStatus(requestId, {
@@ -806,6 +810,7 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
             prompt: chunkPrompt,
             systemPrompt: RESUME_SYSTEM_PROMPT,
             temperature: 0.2,
+            maxTokens: 8192,
           });
           
           chunkResponses.push(chunkResponse);
@@ -824,6 +829,7 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
         prompt: resumeText,
         systemPrompt: RESUME_SYSTEM_PROMPT,
         temperature: 0.2,
+        maxTokens: 8192,
       });
     }
     
@@ -985,7 +991,7 @@ async function processResumeAnalysis(requestId, resumeData) {
       prompt: analysisPrompt,
       systemPrompt: ANALYSIS_SYSTEM_PROMPT,
       temperature: 0.5,
-      maxTokens: 1500, // More tokens for comprehensive analysis
+      maxTokens: 8192,
       requestId // Pass the request ID for tracking
     });
     
@@ -1161,7 +1167,7 @@ app.post('/api/v1/resume/improvement-analytics', async (req, res) => {
       prompt: analyticsPrompt,
       systemPrompt: ANALYTICS_SYSTEM_PROMPT,
       temperature: 0.5,
-      maxTokens: 1500, // More tokens for comprehensive analysis
+      maxTokens: 8192,
     });
     
     console.log('Claude response received (first 200 chars):', response.substring(0, 200));

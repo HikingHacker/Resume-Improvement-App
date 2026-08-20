@@ -69,6 +69,108 @@ function extractBulletPointsFromText(text) {
 }
 
 /**
+ * Strip markdown fences and return the JSON-looking portion of a model response.
+ * @param {string} response
+ * @returns {string|null}
+ */
+function extractJsonCandidate(response) {
+  if (!response) return null;
+
+  const fenced = response.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced ? fenced[1] : response).trim();
+  const start = candidate.indexOf('{');
+  if (start === -1) return null;
+  return candidate.slice(start).replace(/```\s*$/, '').trim();
+}
+
+/**
+ * Close truncated JSON by finishing an open string and unmatched braces/brackets.
+ * @param {string} jsonString
+ * @returns {string}
+ */
+function repairTruncatedJson(jsonString) {
+  let s = jsonString.trim();
+
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') inString = !inString;
+  }
+  if (inString) s += '"';
+
+  inString = false;
+  escaped = false;
+  const stack = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') stack.pop();
+  }
+
+  s = s.replace(/,\s*$/, '');
+  while (stack.length) s += stack.pop();
+  return s;
+}
+
+function tryParseJson(jsonString) {
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    return null;
+  }
+}
+
+function fallbackBulletPointResult(response, note) {
+  const bulletPoints = extractBulletPointsFromText(response);
+
+  if (bulletPoints.length > 0) {
+    console.log(`Found ${bulletPoints.length} bullet points using fallback method`);
+    return {
+      success: true,
+      bulletPoints,
+      note,
+    };
+  }
+
+  const fallbackBullets = response.split('\n')
+    .filter(line => line.trim().length > 0)
+    .slice(0, 10);
+
+  if (fallbackBullets.length > 0) {
+    console.log('Using last resort fallback - first few lines of response');
+    return {
+      success: true,
+      bulletPoints: fallbackBullets,
+      note: "Used last resort fallback method",
+    };
+  }
+
+  throw new Error('Failed to extract any bullet points from Claude response');
+}
+
+/**
  * Process Claude API response to extract bullet points with fallbacks
  * @param {string} response - The Claude API response text
  * @returns {Object} Object with bulletPoints and metadata
@@ -123,94 +225,55 @@ function processBulletPointResponse(response) {
     };
   }
   
-  // Try to find JSON object in the response, handling different potential formats
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
-  
-  // Log more details about what we found to help with debugging
-  if (jsonMatch) {
-    console.log('Found potential JSON object:', jsonMatch[0].substring(0, 200) + '...');
-  } else {
+  const jsonString = extractJsonCandidate(response);
+
+  if (!jsonString) {
     console.log('No JSON object found in response, attempting fallback parsing');
     console.log('Response excerpt:', response.substring(0, 200) + '...');
-    
-    // Use helper function to extract bullet points
-    const bulletPoints = extractBulletPointsFromText(response);
-    
-    if (bulletPoints.length > 0) {
-      console.log(`Found ${bulletPoints.length} bullet points using fallback method`);
-      return {
-        success: true,
-        bulletPoints,
-        note: "Used fallback parsing method"
-      };
-    }
-    
-    // Last resort - just return the first few lines of the response
-    const fallbackBullets = response.split('\n')
-                                 .filter(line => line.trim().length > 0)
-                                 .slice(0, 10);
-                                 
-    if (fallbackBullets.length > 0) {
-      console.log('Using last resort fallback - first few lines of response');
-      return {
-        success: true,
-        bulletPoints: fallbackBullets,
-        note: "Used last resort fallback method"
-      };
-    }
-    
-    throw new Error('Failed to extract any bullet points from Claude response');
+    return fallbackBulletPointResult(response, "Used fallback parsing method");
   }
-  
+
+  console.log('Found potential JSON object:', jsonString.substring(0, 200) + '...');
+  console.log('Attempting to parse JSON object response');
+  console.log('JSON to parse:', jsonString.substring(0, 500) + (jsonString.length > 500 ? '...' : ''));
+
   try {
-    // Parse the JSON response
-    console.log('Attempting to parse JSON object response');
-    const jsonString = jsonMatch[0];
-    
-    // Log the JSON structure being parsed
-    console.log('JSON to parse:', jsonString.substring(0, 500) + (jsonString.length > 500 ? '...' : ''));
-    
-    let parsedData;
-    try {
-      parsedData = JSON.parse(jsonString);
-      console.log('Successfully parsed JSON. Keys:', Object.keys(parsedData));
-    } catch (jsonError) {
-      console.error('JSON parse error:', jsonError);
-      console.log('Invalid JSON structure. Attempting to clean JSON string...');
-      
-      // Try to clean the JSON string and parse again
-      const cleanedJson = jsonString
-        .replace(/\n/g, ' ')
-        .replace(/\r/g, '')
-        .replace(/\t/g, ' ')
-        .replace(/\\/g, '\\\\')
-        .replace(/"{/g, '{')
-        .replace(/}"/g, '}')
-        .replace(/\\"/g, '"')
-        .replace(/"\s+{/g, '{')
-        .replace(/}\s+"/g, '}');
-        
-      console.log('Cleaned JSON:', cleanedJson.substring(0, 200) + '...');
-      parsedData = JSON.parse(cleanedJson);
+    let parsedData = tryParseJson(jsonString);
+
+    if (!parsedData) {
+      console.log('JSON parse failed. Attempting to repair truncated JSON...');
+      parsedData = tryParseJson(repairTruncatedJson(jsonString));
     }
+
+    if (!parsedData) {
+      console.log('Repaired JSON still invalid. Falling back to text extraction.');
+      return fallbackBulletPointResult(response, "Used fallback parsing method after invalid JSON");
+    }
+
+    console.log('Successfully parsed JSON. Keys:', Object.keys(parsedData));
     
     // Check for the new structure
     if (!parsedData.bullet_points || !Array.isArray(parsedData.bullet_points)) {
       console.error('Missing expected structure. Keys found:', Object.keys(parsedData));
-      throw new Error('Parsed response does not match expected structure');
+      return fallbackBulletPointResult(response, "Used fallback parsing method after unexpected JSON structure");
     }
     
     // Clean up the parsed data to ensure consistent formatting
     const cleanedData = {
       bullet_points: parsedData.bullet_points.map(section => ({
-        company: section.company || "Unknown Company",
-        position: section.position || "Unknown Position",
-        time_period: section.time_period || "",
-        achievements: Array.isArray(section.achievements) ? 
-          section.achievements.map(achievement => 
-            achievement.replace(/^[•\-*]\s*/, "").trim()
-          ) : []
-      }))
+        company: (section && section.company) || "Unknown Company",
+        position: (section && section.position) || "Unknown Position",
+        time_period: (section && section.time_period) || "",
+        achievements: Array.isArray(section && section.achievements) ? 
+          section.achievements
+            .filter(achievement => typeof achievement === 'string' && achievement.trim())
+            .map(achievement => achievement.replace(/^[•\-*]\s*/, "").trim())
+          : []
+      })).filter(section =>
+        section.company !== "Unknown Company" ||
+        section.position !== "Unknown Position" ||
+        section.achievements.length > 0
+      )
     };
     
     // For backward compatibility with the UI, create a flat array of bullet points
@@ -231,7 +294,7 @@ function processBulletPointResponse(response) {
     };
   } catch (parseError) {
     console.error('Error parsing JSON:', parseError);
-    throw new Error('Failed to parse the bullet points JSON');
+    return fallbackBulletPointResult(response, "Used fallback parsing method after JSON error");
   }
 }
 
