@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/Resume-Improvement-App/static/css/main.3a71ccf3.css",
-    "main.js": "/Resume-Improvement-App/static/js/main.541e015b.js",
+    "main.css": "/Resume-Improvement-App/static/css/main.c70f3b0e.css",
+    "main.js": "/Resume-Improvement-App/static/js/main.d02de72d.js",
     "static/js/453.3148ebe5.chunk.js": "/Resume-Improvement-App/static/js/453.3148ebe5.chunk.js",
     "index.html": "/Resume-Improvement-App/index.html",
-    "main.3a71ccf3.css.map": "/Resume-Improvement-App/static/css/main.3a71ccf3.css.map",
-    "main.541e015b.js.map": "/Resume-Improvement-App/static/js/main.541e015b.js.map",
+    "main.c70f3b0e.css.map": "/Resume-Improvement-App/static/css/main.c70f3b0e.css.map",
+    "main.d02de72d.js.map": "/Resume-Improvement-App/static/js/main.d02de72d.js.map",
     "453.3148ebe5.chunk.js.map": "/Resume-Improvement-App/static/js/453.3148ebe5.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.3a71ccf3.css",
-    "static/js/main.541e015b.js"
+    "static/css/main.c70f3b0e.css",
+    "static/js/main.d02de72d.js"
   ]
 }
