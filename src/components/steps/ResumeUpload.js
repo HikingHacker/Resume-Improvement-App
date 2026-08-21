@@ -1,8 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Upload } from 'lucide-react';
+import { ArrowRight, CheckCircle, Upload } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button } from '../ui';
 import { useResumeContext } from '../../contexts/ResumeContext';
 import { PHASE_LABELS } from '../../constants/workflow';
+
+const HOW_IT_WORKS = [
+  {
+    step: 1,
+    title: 'Upload',
+    description: 'Upload your resume in PDF or text format',
+  },
+  {
+    step: 2,
+    title: 'Analyze',
+    description: 'Receive a comprehensive analysis with strengths and improvement areas',
+  },
+  {
+    step: 3,
+    title: 'Improve',
+    description: 'Get AI-generated improvements for each bullet point',
+  },
+];
+
+const KEY_FEATURES = [
+  'Comprehensive resume analysis',
+  'AI-powered bullet point improvements',
+  'Identification of missing skills',
+  'Suggested job roles matching your experience',
+];
 
 const PARSE_STAGES = ['Uploading', 'Reading pages', 'Finding roles'];
 
@@ -94,6 +119,35 @@ const ResumeUpload = () => {
             </div>
           </div>
         )}
+
+        <div className="bg-primary-50 border border-primary-200 p-4 rounded-lg">
+          <h3 className="font-semibold text-primary-800 mb-3">How It Works:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {HOW_IT_WORKS.map(({ step, title, description }) => (
+              <div key={title} className="bg-white p-3 rounded shadow-sm">
+                <div className="flex items-center mb-2">
+                  <div className="bg-primary-100 rounded-full w-6 h-6 flex items-center justify-center mr-2">
+                    <span className="text-primary-600 font-medium text-sm">{step}</span>
+                  </div>
+                  <span className="font-medium text-gray-900">{title}</span>
+                </div>
+                <p className="text-sm text-gray-600">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="font-semibold mb-3 text-gray-900">Key Features:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {KEY_FEATURES.map((feature) => (
+              <div key={feature} className="flex items-start">
+                <CheckCircle className="h-5 w-5 text-secondary-500 mr-2 mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-gray-700">{feature}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <label className="flex flex-col items-center p-6 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 w-full transition-colors">
           <div className="bg-primary-100 p-3 rounded-full mb-3">
