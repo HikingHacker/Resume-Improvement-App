@@ -67,4 +67,31 @@ describe('InsightsReview', () => {
     await userEvent.click(screen.getByRole('button', { name: /start rewriting/i }));
     expect(handleStepNavigation).toHaveBeenCalledWith(PHASES.IMPROVE, { first: true });
   });
+
+  it('mirrors the loaded layout while analysis is pending', () => {
+    useResumeContext.mockReturnValue({
+      resumeData,
+      resumeAnalysis: null,
+      resumeEdited: false,
+      getResumeAnalysis,
+      loading: { analyze: true },
+      errors: {},
+      targetRole: 'Staff Engineer',
+      jobDescriptions: [''],
+      savedBullets: {},
+      skippedBullets: {},
+      selectBullet,
+      selectFirstBullet,
+      handleStepNavigation,
+      handleNavigation: jest.fn(),
+    });
+
+    render(<InsightsReview />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/generating insights/i);
+    expect(screen.getByText(/matching bullets to the diagnosis/i)).toBeInTheDocument();
+    expect(screen.queryByText(/add a metric to bullets that only describe duties/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/insights will fill this list/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/recent staff-level ownership/i)).not.toBeInTheDocument();
+  });
 });

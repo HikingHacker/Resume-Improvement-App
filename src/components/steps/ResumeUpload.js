@@ -120,6 +120,18 @@ const ResumeUpload = () => {
           </div>
         )}
 
+        <div>
+          <h3 className="font-semibold mb-3 text-gray-900">Key Features:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {KEY_FEATURES.map((feature) => (
+              <div key={feature} className="flex items-start">
+                <CheckCircle className="h-5 w-5 text-secondary-500 mr-2 mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-gray-700">{feature}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="bg-primary-50 border border-primary-200 p-4 rounded-lg">
           <h3 className="font-semibold text-primary-800 mb-3">How It Works:</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -132,18 +144,6 @@ const ResumeUpload = () => {
                   <span className="font-medium text-gray-900">{title}</span>
                 </div>
                 <p className="text-sm text-gray-600">{description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="font-semibold mb-3 text-gray-900">Key Features:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {KEY_FEATURES.map((feature) => (
-              <div key={feature} className="flex items-start">
-                <CheckCircle className="h-5 w-5 text-secondary-500 mr-2 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-700">{feature}</span>
               </div>
             ))}
           </div>

@@ -19,6 +19,7 @@ import {
 import { useResumeContext } from '../../contexts/ResumeContext';
 import InsightsPanel, { getBulletInsightChips } from './InsightsPanel';
 import { normalizeJobDescriptions } from '../../utils/bulletPriority';
+import { getDetailQuestionPlaceholder } from '../../utils/detailQuestions';
 import { countPlaceholders, extractPlaceholders, hasInventedNumbers } from '../../utils/placeholders';
 
 const getBulletStatus = (bulletId, improvements, savedBullets, skippedBullets) => {
@@ -52,7 +53,7 @@ const DetailQuestionsForm = ({
       <div key={question}>
         <p className="text-sm text-gray-800 mb-1">{question}</p>
         <Textarea
-          placeholder="Team size, %, $, time — whatever is true"
+          placeholder={getDetailQuestionPlaceholder(question)}
           value={answers?.[index] || ''}
           onChange={(e) => onChange(index, e.target.value)}
           rows={2}

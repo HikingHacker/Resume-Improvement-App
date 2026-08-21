@@ -9,7 +9,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-  SkeletonText,
+  Skeleton,
 } from '../ui';
 import { useResumeContext } from '../../contexts/ResumeContext';
 import { PHASES } from '../../constants/workflow';
@@ -18,12 +18,102 @@ import { buildInsightTasks } from '../../utils/insightTasks';
 
 const skillName = (skill) => (typeof skill === 'string' ? skill : skill?.name);
 
+const LINE_WIDTHS = ['w-full', 'w-11/12', 'w-4/5'];
+const BADGE_WIDTHS = ['w-16', 'w-24', 'w-20', 'w-28', 'w-14'];
+
+const SkeletonLine = ({ className = 'w-full' }) => (
+  <Skeleton className={`h-4 ${className}`} />
+);
+
+const SkeletonList = ({ lines = 3 }) => (
+  <ul className="space-y-2">
+    {LINE_WIDTHS.slice(0, lines).map((width) => (
+      <li key={width} className="flex items-start gap-2">
+        <Skeleton variant="circle" className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+        <SkeletonLine className={width} />
+      </li>
+    ))}
+  </ul>
+);
+
+const InsightsLayoutSkeleton = () => (
+  <div role="status" aria-live="polite" aria-busy="true">
+    <span className="sr-only">Generating insights</span>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)] lg:items-stretch">
+      <div className="space-y-6">
+        <section className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <SkeletonList lines={3} />
+        </section>
+        <section className="space-y-2">
+          <Skeleton className="h-4 w-16" />
+          <SkeletonList lines={2} />
+        </section>
+        <section className="space-y-2">
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="h-3 w-64 max-w-full" />
+          <div className="space-y-2">
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                className={`w-full rounded-md border p-3 space-y-2 ${
+                  index === 0 ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+                }`}
+              >
+                <SkeletonLine className="w-3/4" />
+                <Skeleton className="h-3 w-full" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="space-y-2">
+          <Skeleton className="h-4 w-52 max-w-full" />
+          <div className="flex flex-wrap gap-1.5">
+            {BADGE_WIDTHS.map((width) => (
+              <Skeleton key={width} className={`h-6 ${width} rounded-full`} />
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="relative min-h-0">
+        <Card
+          variant="bordered"
+          className="h-fit shadow-none lg:absolute lg:inset-x-0 lg:top-0 lg:max-h-full lg:flex lg:flex-col lg:overflow-hidden"
+        >
+          <CardHeader className="py-4 flex-shrink-0">
+            <CardTitle className="text-base">Work plan</CardTitle>
+            <CardDescription>Matching bullets to the diagnosis…</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                className={`rounded-md border p-3 space-y-2 ${
+                  index === 0 ? 'border-primary-300 bg-primary-50' : 'border-gray-200 bg-white'
+                }`}
+              >
+                <Skeleton className="h-3 w-40" />
+                <SkeletonLine />
+                <SkeletonLine className="w-5/6" />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  </div>
+);
+
 const InsightsReview = () => {
   const {
     resumeData,
     resumeAnalysis,
     getResumeAnalysis,
-    loading,
     errors,
     targetRole,
     jobDescriptions,
@@ -74,7 +164,7 @@ const InsightsReview = () => {
   };
 
   const analysisReady = Boolean(resumeAnalysis);
-  const analysisPending = loading.analyze && !resumeAnalysis;
+  const analysisPending = !resumeAnalysis && !errors.analyze;
 
   return (
     <div className="w-full space-y-4">
@@ -87,12 +177,6 @@ const InsightsReview = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {analysisPending && (
-            <div className="space-y-2 mb-4">
-              <p className="text-sm text-gray-600">Generating insights…</p>
-              <SkeletonText lines={4} />
-            </div>
-          )}
           {errors.analyze && !resumeAnalysis && (
             <div className="text-sm text-red-600 mb-4">
               <p className="mb-2">{errors.analyze}</p>
@@ -100,6 +184,9 @@ const InsightsReview = () => {
             </div>
           )}
 
+          {analysisPending ? (
+            <InsightsLayoutSkeleton />
+          ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)] lg:items-stretch">
             <div className="space-y-6 text-sm">
               {analysisReady && (
@@ -267,6 +354,7 @@ const InsightsReview = () => {
             </Card>
             </div>
           </div>
+          )}
         </CardContent>
         <CardFooter className="flex justify-between border-t border-gray-200 pt-4">
           <Button onClick={() => handleNavigation('back')} variant="outline">
