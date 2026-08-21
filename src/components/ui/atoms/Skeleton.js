@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 /**
  * Skeleton component for representing loading state
- * 
+ *
  * @param {Object} props - Component props
  * @param {string} props.className - Additional CSS classes
  * @param {string} props.variant - Shape variant
@@ -11,12 +11,12 @@ import PropTypes from 'prop-types';
  * @param {string|number} props.height - Element height
  * @returns {JSX.Element} Skeleton component
  */
-const Skeleton = ({ 
+const Skeleton = ({
   className = '',
   variant = 'rectangle',
   width,
   height,
-  ...props 
+  ...props
 }) => {
   const variants = {
     rectangle: 'rounded',
@@ -30,7 +30,7 @@ const Skeleton = ({
   return (
     <div
       className={`
-        animate-pulse bg-gray-200 dark:bg-gray-700
+        animate-pulse bg-gray-200
         ${variants[variant]}
         ${width ? `w-${width}` : 'w-full'}
         ${height ? `h-${height}` : ''}
@@ -44,24 +44,24 @@ const Skeleton = ({
 
 /**
  * SkeletonText component for loading text content
- * 
+ *
  * @param {Object} props - Component props
  * @param {number} props.lines - Number of text lines to show
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} SkeletonText component
  */
-const SkeletonText = ({ 
+const SkeletonText = ({
   lines = 3,
   className = '',
-  ...props 
+  ...props
 }) => {
   return (
     <div className={`space-y-2 ${className}`} {...props}>
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton 
+        <Skeleton
           key={i}
-          variant="text" 
-          className={i === lines - 1 ? 'w-4/5' : 'w-full'} 
+          variant="text"
+          className={i === lines - 1 ? 'w-4/5' : 'w-full'}
         />
       ))}
     </div>
@@ -70,16 +70,16 @@ const SkeletonText = ({
 
 /**
  * SkeletonAvatar component for loading avatar images
- * 
+ *
  * @param {Object} props - Component props
  * @param {string} props.size - Avatar size
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} SkeletonAvatar component
  */
-const SkeletonAvatar = ({ 
+const SkeletonAvatar = ({
   size = 'md',
   className = '',
-  ...props 
+  ...props
 }) => {
   const sizes = {
     sm: 'h-8 w-8',
@@ -87,34 +87,34 @@ const SkeletonAvatar = ({
     lg: 'h-16 w-16',
     xl: 'h-24 w-24',
   };
-  
+
   return (
-    <Skeleton 
-      variant="circle" 
-      className={`${sizes[size]} ${className}`} 
-      {...props} 
+    <Skeleton
+      variant="circle"
+      className={`${sizes[size]} ${className}`}
+      {...props}
     />
   );
 };
 
 /**
  * SkeletonButton component for loading buttons
- * 
+ *
  * @param {Object} props - Component props
  * @param {string|number} props.width - Button width
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} SkeletonButton component
  */
-const SkeletonButton = ({ 
+const SkeletonButton = ({
   width = 'full',
   className = '',
-  ...props 
+  ...props
 }) => {
   return (
-    <Skeleton 
-      variant="button" 
-      className={`w-${width} ${className}`} 
-      {...props} 
+    <Skeleton
+      variant="button"
+      className={`w-${width} ${className}`}
+      {...props}
     />
   );
 };

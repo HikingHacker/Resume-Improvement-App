@@ -152,7 +152,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  * @param {Object} resumeData - The resume data to analyze 
  * @returns {Object} Mock analysis data
  */
-const generateMockAnalysis = (resumeData) => {
+const generateMockAnalysis = (resumeData, options = {}) => {
   // Extract job titles and skills from resume data to personalize the mock analysis
   const jobTitles = resumeData.bullet_points.map(job => job.position || "Unknown Position");
   const companies = resumeData.bullet_points.map(job => job.company || "Unknown Company");
@@ -278,7 +278,7 @@ const generateMockAnalysis = (resumeData) => {
       "Leadership and team management experience"
     ],
     recommendedRoles: [
-      latestPosition,
+      options.targetRole || latestPosition,
       latestPosition.includes("Developer") ? "Full Stack Engineer" : "Technical Lead",
       latestPosition.includes("Front") ? "UI/UX Developer" : "Software Architect", 
       "Technical Project Manager"
@@ -790,7 +790,7 @@ async function mockApiRequest(endpoint, options) {
     case endpoint.endsWith('/resume/export'):
       return mockExportResume(body);
     case endpoint.endsWith('/resume/analyze'):
-      return mockAnalyzeResume(body?.resumeData);
+      return mockAnalyzeResume(body);
     case endpoint.endsWith('/resume/improvement-analytics'):
       return mockImprovementAnalytics(body);
     default:
@@ -818,7 +818,39 @@ function mockParseResume() {
  * Returns improved bullet points with reasoning and follow-up questions
  */
 function mockImproveResume(data) {
-  const { bulletPoint, additionalContext = "" } = data;
+  const { bulletPoint, additionalContext = "", task, skillName } = data;
+
+  if (task === 'details') {
+    return {
+      success: true,
+      remainingWeaknesses: "The original bullet is missing a metric and the scale of the work.",
+      followUpQuestions: [
+        "What changed because of this work (metric, outcome, or decision)?",
+        "About how many people, systems, or dollars were involved?",
+        "What tools or methods did you actually use?",
+      ],
+    };
+  }
+
+  if (task === 'skill') {
+    const skill = skillName || 'this skill';
+    return {
+      success: true,
+      multipleSuggestions: [
+        `Applied ${skill} to ship a [project] that improved [X%] of a core metric`,
+        `Used ${skill} with the existing stack to reduce [N hours] of manual work`,
+        `Partnered across teams to introduce ${skill}, unblocking [N people] on delivery`,
+      ],
+      improvedBulletPoint: `Applied ${skill} to ship a [project] that improved [X%] of a core metric`,
+      reasoning: "Each option shows the skill in a different way and leaves quantities as placeholders for you to fill in.",
+      remainingWeaknesses: "Replace the placeholders with a real metric from this role.",
+      followUpQuestions: [
+        "What changed because you used this skill?",
+        "About how many people, systems, or dollars were involved?",
+        "How long did this take?",
+      ],
+    };
+  }
   
   // If specific bullet point and context are provided, customize response
   if (bulletPoint && additionalContext) {
@@ -879,8 +911,8 @@ function mockExportResume(data) {
  * Mock function for resume analysis
  * Returns a comprehensive analysis of the resume
  */
-function mockAnalyzeResume(resumeData) {
-  return generateMockAnalysis(resumeData);
+function mockAnalyzeResume(body) {
+  return generateMockAnalysis(body?.resumeData, body);
 }
 
 /**
@@ -1090,7 +1122,7 @@ export const ResumeAPI = {
         }
         
         // Generate mock analysis based on the resume data
-        const mockAnalysis = generateMockAnalysis(resumeData);
+        const mockAnalysis = generateMockAnalysis(resumeData, options);
         return mockAnalysis;
       }
       
@@ -1098,7 +1130,11 @@ export const ResumeAPI = {
       console.log("Sending resume data to analysis API...");
       return await apiRequest('/api/v1/resume/analyze', {
         method: 'POST',
-        body: { resumeData },
+        body: {
+          resumeData,
+          targetRole: options.targetRole || '',
+          jobDescriptions: options.jobDescriptions || [],
+        },
         longRunning,
         timeout: 60000, // 60 second timeout for analysis requests
         
@@ -1163,14 +1199,20 @@ export const ResumeAPI = {
         }
         
         // Use our mock implementation that takes the same params for consistency
-        return mockImprovementAnalytics({ resumeData, improvements, savedBullets });
+        return mockImprovementAnalytics({ resumeData, improvements, savedBullets, ...options });
       }
       
       // Real API implementation using our robust apiRequest function
       console.log("Sending data to improvement analytics API...");
       return await apiRequest('/api/v1/resume/improvement-analytics', {
         method: 'POST',
-        body: { resumeData, improvements, savedBullets },
+        body: {
+          resumeData,
+          improvements,
+          savedBullets,
+          targetRole: options.targetRole || '',
+          jobDescriptions: options.jobDescriptions || [],
+        },
         longRunning,
         timeout: 60000, // 60 second timeout for analytics
         
@@ -1205,13 +1247,14 @@ export const ResumeAPI = {
    * Expected API Endpoint: POST /api/v1/resume/improve
    * Content-Type: application/json
    */
-  async getAISuggestions(bulletPoint, additionalContext = "") {
+  async getAISuggestions(bulletPoint, additionalContext = "", requestOptions = {}) {
     try {
+      const body = { bulletPoint, additionalContext, ...requestOptions };
       if (API_CONFIG.useMockData) {
         // Use mock implementation
         return apiRequest('/api/v1/resume/improve', {
           method: 'POST',
-          body: { bulletPoint, additionalContext }
+          body
         });
       }
       
@@ -1221,7 +1264,7 @@ export const ResumeAPI = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ bulletPoint, additionalContext }),
+        body: JSON.stringify(body),
       });
       
       if (!response.ok) {
@@ -1234,7 +1277,9 @@ export const ResumeAPI = {
       return await response.json();
     } catch (error) {
       console.error('Failed to get AI suggestions:', error);
-      throw new Error('Failed to generate AI suggestions. Please try again later.');
+      throw error instanceof Error
+        ? error
+        : new Error('Failed to generate AI suggestions. Please try again later.');
     }
   },
 

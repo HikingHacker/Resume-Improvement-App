@@ -4,22 +4,22 @@ import PropTypes from 'prop-types';
 /**
  * Card component for containing content in a styled container
  */
-const Card = ({ 
-  children, 
-  className = '', 
-  variant = 'default', 
-  ...props 
+const Card = ({
+  children,
+  className = '',
+  variant = 'default',
+  ...props
 }) => {
   const variants = {
-    default: 'bg-white dark:bg-gray-800 dark:border-gray-700',
-    bordered: 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-    elevated: 'bg-white dark:bg-gray-800 shadow-lg',
-    flat: 'bg-gray-50 dark:bg-gray-900',
-    interactive: 'bg-white dark:bg-gray-800 hover:shadow-md transition-shadow cursor-pointer',
+    default: 'bg-white',
+    bordered: 'bg-white border border-gray-200',
+    elevated: 'bg-white shadow-lg',
+    flat: 'bg-gray-50',
+    interactive: 'bg-white hover:shadow-md transition-shadow cursor-pointer',
   };
 
   return (
-    <div 
+    <div
       className={`rounded-lg shadow-md transition-all ${variants[variant]} ${className}`}
       tabIndex={props.onClick ? 0 : undefined}
       role={props.onClick ? 'button' : undefined}
@@ -33,14 +33,14 @@ const Card = ({
 /**
  * Card header component
  */
-const CardHeader = ({ 
-  children, 
-  className = '', 
-  ...props 
+const CardHeader = ({
+  children,
+  className = '',
+  ...props
 }) => {
   return (
-    <div 
-      className={`p-6 pb-3 border-b border-gray-100 dark:border-gray-700 ${className}`} 
+    <div
+      className={`p-6 pb-3 border-b border-gray-100 ${className}`}
       {...props}
     >
       {children}
@@ -51,14 +51,14 @@ const CardHeader = ({
 /**
  * Card title component
  */
-const CardTitle = ({ 
-  children, 
-  className = '', 
-  ...props 
+const CardTitle = ({
+  children,
+  className = '',
+  ...props
 }) => {
   return (
-    <h3 
-      className={`text-xl font-bold text-gray-900 dark:text-white ${className}`} 
+    <h3
+      className={`text-xl font-bold text-gray-900 ${className}`}
       {...props}
     >
       {children}
@@ -69,14 +69,14 @@ const CardTitle = ({
 /**
  * Card description component
  */
-const CardDescription = ({ 
-  children, 
-  className = '', 
-  ...props 
+const CardDescription = ({
+  children,
+  className = '',
+  ...props
 }) => {
   return (
-    <p 
-      className={`text-sm text-gray-500 dark:text-gray-400 mt-1 ${className}`} 
+    <p
+      className={`text-sm text-gray-500 mt-1 ${className}`}
       {...props}
     >
       {children}
@@ -87,14 +87,14 @@ const CardDescription = ({
 /**
  * Card content component
  */
-const CardContent = ({ 
-  children, 
-  className = '', 
-  ...props 
+const CardContent = ({
+  children,
+  className = '',
+  ...props
 }) => {
   return (
-    <div 
-      className={`p-6 pt-3 animate-fade-in ${className}`} 
+    <div
+      className={`p-6 pt-3 animate-fade-in ${className}`}
       {...props}
     >
       {children}
@@ -105,14 +105,14 @@ const CardContent = ({
 /**
  * Card footer component
  */
-const CardFooter = ({ 
-  children, 
-  className = '', 
-  ...props 
+const CardFooter = ({
+  children,
+  className = '',
+  ...props
 }) => {
   return (
-    <div 
-      className={`p-6 pt-0 flex justify-end items-center gap-2 ${className}`} 
+    <div
+      className={`p-6 pt-0 flex justify-end items-center gap-2 ${className}`}
       {...props}
     >
       {children}
@@ -154,13 +154,13 @@ CardFooter.propTypes = {
 };
 
 // Export all components
-export { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardContent, 
-  CardFooter 
+export {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter
 };
 
 // Default export for the main Card component

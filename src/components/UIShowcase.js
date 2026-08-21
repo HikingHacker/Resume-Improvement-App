@@ -10,7 +10,7 @@ import {
   SkeletonText,
   Badge,
   Tooltip,
-  
+
   // Molecules
   Card,
   CardHeader,
@@ -25,13 +25,13 @@ import {
   TableHead,
   TableCell,
   ConfirmationModal,
-  
+
   // Organisms
   StepNavigation,
-  
+
   // Templates
   Layout,
-  
+
   // Utils
   cn
 } from './ui';
@@ -46,7 +46,7 @@ const UIShowcase = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('buttons');
-  
+
   // Steps for StepNavigation example
   const steps = [
     { value: 1, label: 'Account' },
@@ -54,17 +54,17 @@ const UIShowcase = () => {
     { value: 3, label: 'Review' },
     { value: 4, label: 'Complete' }
   ];
-  
+
   // Sample table data
   const tableData = [
     { id: 1, name: 'John Doe', email: 'john@example.com', status: 'Active' },
     { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'Inactive' },
     { id: 3, name: 'Bob Johnson', email: 'bob@example.com', status: 'Pending' }
   ];
-  
+
   // Helper function for step navigation
   const isStepCompleted = (step) => step < currentStep;
-  
+
   return (
     <Layout>
       <Card className="mb-6">
@@ -76,15 +76,15 @@ const UIShowcase = () => {
         </CardHeader>
         <CardContent>
           <div className="mb-6">
-            <div className="flex space-x-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+            <div className="flex space-x-4 border-b border-gray-200 overflow-x-auto">
               {['buttons', 'inputs', 'cards', 'tables', 'navigation', 'feedback'].map((tab) => (
                 <button
                   key={tab}
                   className={cn(
                     'px-4 py-2 capitalize border-b-2 font-medium transition-colors whitespace-nowrap',
                     activeTab === tab
-                      ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                      ? 'border-primary-600 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
                   )}
                   onClick={() => setActiveTab(tab)}
                 >
@@ -93,11 +93,11 @@ const UIShowcase = () => {
               ))}
             </div>
           </div>
-          
+
           {activeTab === 'buttons' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Button Variants</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Button Variants</h3>
                 <div className="flex flex-wrap gap-3">
                   <Button variant="primary">Primary</Button>
                   <Button variant="secondary">Secondary</Button>
@@ -106,18 +106,18 @@ const UIShowcase = () => {
                   <Button variant="danger">Danger</Button>
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Button Sizes</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Button Sizes</h3>
                 <div className="flex items-center flex-wrap gap-3">
                   <Button size="sm">Small</Button>
                   <Button size="md">Medium</Button>
                   <Button size="lg">Large</Button>
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Button States</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Button States</h3>
                 <div className="flex flex-wrap gap-3">
                   <Button>Normal</Button>
                   <Button loading>Loading</Button>
@@ -130,61 +130,61 @@ const UIShowcase = () => {
               </section>
             </div>
           )}
-          
+
           {activeTab === 'inputs' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Text Inputs</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Text Inputs</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input label="Name" placeholder="Enter your name" />
-                  <Input 
-                    label="Email" 
-                    type="email" 
-                    placeholder="example@email.com" 
-                    startIcon={<Mail className="w-4 h-4 text-gray-500" />} 
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="example@email.com"
+                    startIcon={<Mail className="w-4 h-4 text-gray-500" />}
                   />
-                  <Input 
-                    label="Password" 
-                    type={passwordVisible ? "text" : "password"} 
-                    placeholder="Enter your password" 
+                  <Input
+                    label="Password"
+                    type={passwordVisible ? "text" : "password"}
+                    placeholder="Enter your password"
                     startIcon={<Lock className="w-4 h-4 text-gray-500" />}
                     endIcon={
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setPasswordVisible(!passwordVisible)}
-                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                        className="text-gray-500 hover:text-gray-700"
                       >
-                        {passwordVisible ? 
-                          <EyeOff className="w-4 h-4" /> : 
+                        {passwordVisible ?
+                          <EyeOff className="w-4 h-4" /> :
                           <Eye className="w-4 h-4" />
                         }
                       </button>
                     }
                   />
-                  <Input 
-                    label="Error Example" 
-                    error="This field is required" 
-                    placeholder="Input with error" 
+                  <Input
+                    label="Error Example"
+                    error="This field is required"
+                    placeholder="Input with error"
                   />
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Textarea</h3>
-                <Textarea 
-                  label="Message" 
-                  placeholder="Enter your message here..." 
-                  rows={4} 
-                  helperText="Max 500 characters" 
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Textarea</h3>
+                <Textarea
+                  label="Message"
+                  placeholder="Enter your message here..."
+                  rows={4}
+                  helperText="Max 500 characters"
                 />
               </section>
             </div>
           )}
-          
+
           {activeTab === 'cards' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Card Variants</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Card Variants</h3>
                 <div className="grid gap-6 md:grid-cols-2">
                   <Card>
                     <CardHeader>
@@ -192,7 +192,7 @@ const UIShowcase = () => {
                       <CardDescription>This is a basic card component</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-700 dark:text-gray-300">Cards are used to group related content and actions.</p>
+                      <p className="text-gray-700">Cards are used to group related content and actions.</p>
                     </CardContent>
                     <CardFooter>
                       <div className="flex justify-end gap-2">
@@ -201,25 +201,25 @@ const UIShowcase = () => {
                       </div>
                     </CardFooter>
                   </Card>
-                  
+
                   <Card variant="bordered">
                     <CardHeader>
                       <CardTitle>Bordered Card</CardTitle>
                       <CardDescription>This card has a border</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-700 dark:text-gray-300">Different card variants can be used for different contexts.</p>
+                      <p className="text-gray-700">Different card variants can be used for different contexts.</p>
                     </CardContent>
                   </Card>
                 </div>
               </section>
             </div>
           )}
-          
+
           {activeTab === 'tables' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Data Table</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Data Table</h3>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -236,9 +236,9 @@ const UIShowcase = () => {
                         <TableCell>{row.name}</TableCell>
                         <TableCell>{row.email}</TableCell>
                         <TableCell>
-                          <Badge 
+                          <Badge
                             variant={
-                              row.status === 'Active' ? 'success' : 
+                              row.status === 'Active' ? 'success' :
                               row.status === 'Inactive' ? 'danger' : 'warning'
                             }
                           >
@@ -252,12 +252,12 @@ const UIShowcase = () => {
               </section>
             </div>
           )}
-          
+
           {activeTab === 'navigation' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Step Navigation</h3>
-                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Step Navigation</h3>
+                <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                   <StepNavigation
                     currentStep={currentStep}
                     steps={steps}
@@ -265,16 +265,16 @@ const UIShowcase = () => {
                     disabled={[4]}
                     isStepCompleted={isStepCompleted}
                   />
-                  
+
                   <div className="flex justify-center mt-8 gap-3">
-                    <Button 
+                    <Button
                       onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
                       disabled={currentStep === 1}
                       variant="outline"
                     >
                       Previous
                     </Button>
-                    <Button 
+                    <Button
                       onClick={() => setCurrentStep(prev => Math.min(4, prev + 1))}
                       disabled={currentStep === 4}
                     >
@@ -285,11 +285,11 @@ const UIShowcase = () => {
               </section>
             </div>
           )}
-          
+
           {activeTab === 'feedback' && (
             <div className="space-y-8">
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Badges</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Badges</h3>
                 <div className="flex flex-wrap gap-3">
                   <Badge variant="primary">Primary</Badge>
                   <Badge variant="secondary">Secondary</Badge>
@@ -300,22 +300,22 @@ const UIShowcase = () => {
                   <Badge variant="primary" outline>Outline</Badge>
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Tooltips</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Tooltips</h3>
                 <div className="flex gap-4 justify-center py-4">
                   <Tooltip content="Top tooltip" position="top">
                     <Button variant="outline" size="sm">Hover me (Top)</Button>
                   </Tooltip>
-                  
+
                   <Tooltip content="Bottom tooltip position" position="bottom">
                     <Button variant="outline" size="sm">Hover me (Bottom)</Button>
                   </Tooltip>
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Loading States</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Loading States</h3>
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-12 w-12" variant="avatar" />
@@ -324,15 +324,15 @@ const UIShowcase = () => {
                       <Skeleton className="h-3 w-24" />
                     </div>
                   </div>
-                  
+
                   <SkeletonText lines={3} />
                 </div>
               </section>
-              
+
               <section>
-                <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Modal</h3>
+                <h3 className="text-lg font-medium mb-4 text-gray-900">Modal</h3>
                 <Button onClick={() => setModalOpen(true)}>Open Modal</Button>
-                
+
                 <ConfirmationModal
                   isOpen={modalOpen}
                   title="Confirm Action"

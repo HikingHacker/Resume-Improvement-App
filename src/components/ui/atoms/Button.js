@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 /**
  * Button component for user interactions
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Button content
  * @param {Function} props.onClick - Click handler function
@@ -14,24 +14,24 @@ import PropTypes from 'prop-types';
  * @param {boolean} props.loading - Whether to show loading spinner
  * @returns {JSX.Element} Button component
  */
-const Button = ({ 
-  children, 
-  onClick, 
-  className = '', 
-  disabled = false, 
-  variant = 'primary', 
+const Button = ({
+  children,
+  onClick,
+  className = '',
+  disabled = false,
+  variant = 'primary',
   size = 'md',
   loading = false,
   type = 'button',
-  ...props 
+  ...props
 }) => {
   // Variant styles
   const variants = {
-    primary: `bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-800`,
-    secondary: `bg-secondary-600 text-white hover:bg-secondary-700 focus:ring-secondary-500 dark:bg-secondary-700 dark:hover:bg-secondary-800`,
-    outline: `border border-primary-600 text-primary-600 bg-transparent hover:bg-primary-50 focus:ring-primary-500 dark:border-primary-400 dark:text-primary-400 dark:hover:bg-gray-800`,
-    ghost: `bg-transparent text-primary-600 hover:bg-gray-100 focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-800`,
-    danger: `bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-700 dark:hover:bg-red-800`,
+    primary: `bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500`,
+    secondary: `bg-secondary-600 text-white hover:bg-secondary-700 focus:ring-secondary-500`,
+    outline: `border border-primary-600 text-primary-600 bg-transparent hover:bg-primary-50 focus:ring-primary-500`,
+    ghost: `bg-transparent text-primary-600 hover:bg-gray-100 focus:ring-primary-500`,
+    danger: `bg-red-600 text-white hover:bg-red-700 focus:ring-red-500`,
   };
 
   // Size styles
@@ -47,7 +47,7 @@ const Button = ({
     <button
       className={`rounded flex items-center justify-center transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed ${
         isDisabled
-          ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
           : variants[variant]
       } ${sizes[size]} ${className}`}
       onClick={onClick}
@@ -57,10 +57,10 @@ const Button = ({
       {...props}
     >
       {loading && (
-        <svg 
-          className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" 
-          xmlns="http://www.w3.org/2000/svg" 
-          fill="none" 
+        <svg
+          className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
           viewBox="0 0 24 24"
           aria-hidden="true"
         >

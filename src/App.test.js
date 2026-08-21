@@ -1,8 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders resume improvement app', () => {
+test('renders resume dj app', () => {
   render(<App />);
-  const headingElement = screen.getByText(/Resume Improvement Assistant/i);
-  expect(headingElement).toBeInTheDocument();
+  expect(screen.getByText(/Don’t just apply—headline the show/i)).toBeInTheDocument();
 });

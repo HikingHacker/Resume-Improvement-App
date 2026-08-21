@@ -8,8 +8,12 @@
 import {
   BULLET_IMPROVEMENT_SYSTEM_PROMPT,
   getBulletImprovementPrompt,
+  BULLET_DETAILS_SYSTEM_PROMPT,
+  getBulletDetailsPrompt,
   RESUME_PARSER_SYSTEM_PROMPT,
-  getResumeParserPrompt
+  getResumeParserPrompt,
+  SKILL_BULLET_SYSTEM_PROMPT,
+  getSkillBulletPrompt,
 } from './prompts';
 
 // Configuration will be loaded from environment variables 
@@ -201,15 +205,30 @@ const _executeClaudeRequest = async (options) => {
  * @param {string} additionalContext - Additional context about the experience
  * @returns {Promise<Object>} - Improved bullet point data
  */
-export const improveBulletPoint = async (bulletPoint, additionalContext = '') => {
-  const systemPrompt = BULLET_IMPROVEMENT_SYSTEM_PROMPT;
-  const prompt = getBulletImprovementPrompt(bulletPoint, additionalContext);
+export const improveBulletPoint = async (bulletPoint, additionalContext = '', options = {}) => {
+  const skillTask = options.task === 'skill';
+  const detailsTask = options.task === 'details';
+  const systemPrompt = skillTask
+    ? SKILL_BULLET_SYSTEM_PROMPT
+    : detailsTask
+      ? BULLET_DETAILS_SYSTEM_PROMPT
+      : BULLET_IMPROVEMENT_SYSTEM_PROMPT;
+  const prompt = skillTask
+    ? `${getSkillBulletPrompt(
+      options.skillName,
+      options.skillRecommendation,
+      options.jobDetails,
+      options.selectedKeywords
+    )}${additionalContext ? `\n\nUser notes:\n${additionalContext}` : ''}`
+    : detailsTask
+      ? getBulletDetailsPrompt(bulletPoint, additionalContext)
+      : getBulletImprovementPrompt(bulletPoint, additionalContext);
 
   try {
     const response = await callClaudeAPI({
       prompt,
       systemPrompt,
-      temperature: 0.7, // Slightly higher temperature for more variety
+      temperature: detailsTask ? 0.4 : 0.7,
     });
 
     // Extract JSON from the response
@@ -219,6 +238,17 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     }
 
     const parsedResponse = JSON.parse(jsonMatch[0]);
+
+    if (detailsTask) {
+      const questions = Array.isArray(parsedResponse.followUpQuestions)
+        ? parsedResponse.followUpQuestions.map((question) => String(question || '').trim()).filter(Boolean)
+        : [];
+      return {
+        success: true,
+        followUpQuestions: questions,
+        remainingWeaknesses: parsedResponse.remainingWeaknesses || '',
+      };
+    }
     
     // Make sure we have at least one suggestion, even if the multipleSuggestions array is empty
     let finalSuggestions = parsedResponse.multipleSuggestions || [];
@@ -236,7 +266,9 @@ export const improveBulletPoint = async (bulletPoint, additionalContext = '') =>
     };
   } catch (error) {
     console.error('Error improving bullet point:', error);
-    throw new Error('Failed to improve the bullet point. Please try again.');
+    throw new Error(detailsTask
+      ? 'Failed to generate follow-up questions. Please try again.'
+      : 'Failed to improve the bullet point. Please try again.');
   }
 };
 
@@ -260,14 +292,15 @@ export const extractBulletPoints = async (resumeText) => {
       temperature: 0.2, // More deterministic extraction
     });
 
-    // Extract JSON array from response
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    // Extract JSON object from response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse JSON response from Claude');
     }
 
-    const bulletPoints = JSON.parse(jsonMatch[0]);
-    return bulletPoints;
+    const parsed = JSON.parse(jsonMatch[0]);
+    const jobs = parsed.bullet_points || [];
+    return jobs.flatMap((job) => job.achievements || []);
   } catch (error) {
     console.error('Error extracting bullet points:', error);
     throw new Error('Failed to extract bullet points from the resume. Please try again.');

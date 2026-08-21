@@ -5,7 +5,7 @@ import { Z_INDEX } from '../utils/constants';
 
 /**
  * Tooltip component for displaying additional information on hover
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Element that triggers the tooltip
  * @param {React.ReactNode} props.content - Tooltip content
@@ -59,7 +59,7 @@ const Tooltip = ({
   };
 
   return (
-    <div 
+    <div
       className="relative inline-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -67,12 +67,12 @@ const Tooltip = ({
       onBlur={handleMouseLeave}
     >
       {children}
-      
+
       {isVisible && (
         <div
           role="tooltip"
           className={cn(
-            'absolute z-[1070] max-w-xs px-2 py-1 text-sm text-white bg-gray-900 dark:bg-gray-800 rounded shadow-sm',
+            'absolute z-[1070] max-w-xs px-2 py-1 text-sm text-white bg-gray-900 rounded shadow-sm',
             'animate-fade-in',
             positionStyles[position],
             className
@@ -81,11 +81,11 @@ const Tooltip = ({
           {...props}
         >
           {content}
-          
+
           {arrow && (
-            <span 
+            <span
               className={cn(
-                'absolute border-solid border-4 border-gray-900 dark:border-gray-800',
+                'absolute border-solid border-4 border-gray-900',
                 arrowStyles[position]
               )}
               aria-hidden="true"

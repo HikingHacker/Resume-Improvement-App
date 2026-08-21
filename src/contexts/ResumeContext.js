@@ -1,5 +1,23 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import useResumeService from '../services/hooks/useResumeService';
+import { PHASES, isValidPhase, migrateSavedStep } from '../constants/workflow';
+import {
+  addBulletToJob,
+  addJobToResume,
+  buildOriginalBulletsMap,
+  ensureResumeIds,
+  getBulletId as getStableBulletId,
+  removeBulletFromJob,
+  removeJobFromResume,
+} from '../utils/resumeIds';
+import { analysisContextKey, buildTargetContext, formatRewrittenResumeText, hydrateJobDescriptionFields, listRankedBullets, getTopUnsaved } from '../utils/bulletPriority';
+import { buildInsightContext, buildInsightTasks, getGuideForBullet } from '../utils/insightTasks';
+
+const FALLBACK_DETAIL_QUESTIONS = [
+  'What changed because of this work (metric, outcome, or decision)?',
+  'About how many people, systems, or dollars were involved?',
+  'What tools or methods did you actually use?',
+];
 
 // Define action types as constants to avoid typos
 const ActionTypes = {
@@ -13,6 +31,7 @@ const ActionTypes = {
   SET_ADDITIONAL_CONTEXTS: 'SET_ADDITIONAL_CONTEXTS',
   SET_SHOW_FOLLOW_UP: 'SET_SHOW_FOLLOW_UP',
   SET_RESUME_ANALYSIS: 'SET_RESUME_ANALYSIS',
+  SET_ANALYSIS_TARGET_KEY: 'SET_ANALYSIS_TARGET_KEY',
   SET_SAVED_BULLETS: 'SET_SAVED_BULLETS',
   SET_ORIGINAL_BULLETS: 'SET_ORIGINAL_BULLETS',
   SET_RESUME_EDITED: 'SET_RESUME_EDITED',
@@ -20,6 +39,10 @@ const ActionTypes = {
   SET_EDITING_JOB: 'SET_EDITING_JOB',
   SET_EDITING_BULLET_INFO: 'SET_EDITING_BULLET_INFO',
   SET_EDITED_BULLET: 'SET_EDITED_BULLET',
+  SET_RESUMABLE_PHASE: 'SET_RESUMABLE_PHASE',
+  SET_TARGET_ROLE: 'SET_TARGET_ROLE',
+  SET_JOB_DESCRIPTIONS: 'SET_JOB_DESCRIPTIONS',
+  SET_SKIPPED_BULLETS: 'SET_SKIPPED_BULLETS',
   START_REQUEST: 'START_REQUEST',
   COMPLETE_REQUEST: 'COMPLETE_REQUEST',
   RESET_STATE: 'RESET_STATE',
@@ -28,28 +51,33 @@ const ActionTypes = {
 // Initial state with logical grouping of related state items
 const initialState = {
   // UI navigation state
-  step: 0,
-  
+  step: PHASES.UPLOAD,
+  resumablePhase: null,
+
   // Resume content state
   resumeData: { bullet_points: [] },
   flatBulletPoints: [],
   resumeAnalysis: null,
+  analysisTargetKey: null,
   resumeEdited: false,
-  
+
   // Selection state
   currentJobIndex: null,
   currentBulletIndex: null,
-  
+
   // Improvements state
   improvements: {},
   additionalContexts: {},
   showFollowUpForBullets: {},
   savedBullets: {},
   originalBullets: {},
-  
+  skippedBullets: {},
+  targetRole: '',
+  jobDescriptions: [''],
+
   // Request tracking state for deduplication
   inProgressRequests: {}, // Track in-progress requests to handle StrictMode double invocation
-  
+
   // Editing state
   editingJobIndex: null,
   editingJob: null,
@@ -60,12 +88,12 @@ const initialState = {
 // Reducer with improved structure and organization by state section
 function resumeReducer(state, action) {
   const { type, payload } = action;
-  
+
   switch (type) {
     // UI navigation actions
     case ActionTypes.SET_STEP:
       return { ...state, step: payload };
-    
+
     // Resume content actions
     case ActionTypes.SET_RESUME_DATA:
       return { ...state, resumeData: payload };
@@ -73,28 +101,30 @@ function resumeReducer(state, action) {
       return { ...state, flatBulletPoints: payload };
     case ActionTypes.SET_RESUME_ANALYSIS:
       return { ...state, resumeAnalysis: payload };
+    case ActionTypes.SET_ANALYSIS_TARGET_KEY:
+      return { ...state, analysisTargetKey: payload };
     case ActionTypes.SET_RESUME_EDITED:
       return { ...state, resumeEdited: payload };
-    
-    // Selection actions  
+
+    // Selection actions
     case ActionTypes.SET_CURRENT_JOB_INDEX:
       return { ...state, currentJobIndex: payload };
     case ActionTypes.SET_CURRENT_BULLET_INDEX:
       return { ...state, currentBulletIndex: payload };
-    
+
     // Improvements actions
     case ActionTypes.SET_IMPROVEMENTS:
       return { ...state, improvements: payload };
     case ActionTypes.UPDATE_IMPROVEMENT:
-      return { 
-        ...state, 
-        improvements: { 
-          ...state.improvements, 
+      return {
+        ...state,
+        improvements: {
+          ...state.improvements,
           [payload.bulletId]: {
             ...state.improvements[payload.bulletId],
             ...payload.improvement
           }
-        } 
+        }
       };
     case ActionTypes.SET_ADDITIONAL_CONTEXTS:
       return { ...state, additionalContexts: payload };
@@ -104,27 +134,33 @@ function resumeReducer(state, action) {
       return { ...state, savedBullets: payload };
     case ActionTypes.SET_ORIGINAL_BULLETS:
       return { ...state, originalBullets: payload };
-    
+    case ActionTypes.SET_SKIPPED_BULLETS:
+      return { ...state, skippedBullets: payload };
+    case ActionTypes.SET_TARGET_ROLE:
+      return { ...state, targetRole: payload };
+    case ActionTypes.SET_JOB_DESCRIPTIONS:
+      return { ...state, jobDescriptions: payload };
+
     // Request tracking actions
     case ActionTypes.START_REQUEST:
-      return { 
-        ...state, 
-        inProgressRequests: { 
-          ...state.inProgressRequests, 
+      return {
+        ...state,
+        inProgressRequests: {
+          ...state.inProgressRequests,
           [payload.requestId]: {
             timestamp: Date.now(),
             promise: payload.promise
           }
-        } 
+        }
       };
     case ActionTypes.COMPLETE_REQUEST:
       const updatedRequests = { ...state.inProgressRequests };
       delete updatedRequests[payload.requestId];
-      return { 
-        ...state, 
+      return {
+        ...state,
         inProgressRequests: updatedRequests
       };
-    
+
     // Editing actions
     case ActionTypes.SET_EDITING_JOB_INDEX:
       return { ...state, editingJobIndex: payload };
@@ -134,11 +170,13 @@ function resumeReducer(state, action) {
       return { ...state, editingBulletInfo: payload };
     case ActionTypes.SET_EDITED_BULLET:
       return { ...state, editedBullet: payload };
-    
+    case ActionTypes.SET_RESUMABLE_PHASE:
+      return { ...state, resumablePhase: payload };
+
     // Reset action
     case ActionTypes.RESET_STATE:
       return initialState;
-    
+
     default:
       return state;
   }
@@ -149,7 +187,9 @@ export const STORAGE_KEYS = Object.freeze({
   RESUME_DATA: 'resume-improvement-app-data',
   RESUME_STEP: 'resume-improvement-app-step',
   RESUME_ANALYSIS: 'resume-improvement-app-analysis',
-  RESUME_IMPROVEMENTS: 'resume-improvement-app-improvements'
+  RESUME_IMPROVEMENTS: 'resume-improvement-app-improvements',
+  RESUME_TARGET: 'resume-improvement-app-target',
+  RESUME_PROGRESS: 'resume-improvement-app-progress',
 });
 
 // Create context (using null for stronger typing with useContext)
@@ -163,28 +203,33 @@ const actionCreators = {
   setCurrentJobIndex: (index) => ({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: index }),
   setCurrentBulletIndex: (index) => ({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: index }),
   setImprovements: (improvements) => ({ type: ActionTypes.SET_IMPROVEMENTS, payload: improvements }),
-  updateImprovement: (bulletId, improvement) => ({ 
-    type: ActionTypes.UPDATE_IMPROVEMENT, 
-    payload: { bulletId, improvement } 
+  updateImprovement: (bulletId, improvement) => ({
+    type: ActionTypes.UPDATE_IMPROVEMENT,
+    payload: { bulletId, improvement }
   }),
   setAdditionalContexts: (contexts) => ({ type: ActionTypes.SET_ADDITIONAL_CONTEXTS, payload: contexts }),
   setShowFollowUp: (bullets) => ({ type: ActionTypes.SET_SHOW_FOLLOW_UP, payload: bullets }),
   setResumeAnalysis: (analysis) => ({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis }),
+  setAnalysisTargetKey: (key) => ({ type: ActionTypes.SET_ANALYSIS_TARGET_KEY, payload: key }),
   setSavedBullets: (bullets) => ({ type: ActionTypes.SET_SAVED_BULLETS, payload: bullets }),
   setOriginalBullets: (bullets) => ({ type: ActionTypes.SET_ORIGINAL_BULLETS, payload: bullets }),
+  setSkippedBullets: (bullets) => ({ type: ActionTypes.SET_SKIPPED_BULLETS, payload: bullets }),
+  setTargetRole: (role) => ({ type: ActionTypes.SET_TARGET_ROLE, payload: role }),
+  setJobDescriptions: (descriptions) => ({ type: ActionTypes.SET_JOB_DESCRIPTIONS, payload: descriptions }),
   setResumeEdited: (edited) => ({ type: ActionTypes.SET_RESUME_EDITED, payload: edited }),
-  startRequest: (requestId, promise) => ({ 
-    type: ActionTypes.START_REQUEST, 
-    payload: { requestId, promise } 
+  startRequest: (requestId, promise) => ({
+    type: ActionTypes.START_REQUEST,
+    payload: { requestId, promise }
   }),
-  completeRequest: (requestId) => ({ 
-    type: ActionTypes.COMPLETE_REQUEST, 
-    payload: { requestId } 
+  completeRequest: (requestId) => ({
+    type: ActionTypes.COMPLETE_REQUEST,
+    payload: { requestId }
   }),
   setEditingJobIndex: (index) => ({ type: ActionTypes.SET_EDITING_JOB_INDEX, payload: index }),
   setEditingJob: (job) => ({ type: ActionTypes.SET_EDITING_JOB, payload: job }),
   setEditingBulletInfo: (info) => ({ type: ActionTypes.SET_EDITING_BULLET_INFO, payload: info }),
   setEditedBullet: (bullet) => ({ type: ActionTypes.SET_EDITED_BULLET, payload: bullet }),
+  setResumablePhase: (phase) => ({ type: ActionTypes.SET_RESUMABLE_PHASE, payload: phase }),
   resetState: () => ({ type: ActionTypes.RESET_STATE })
 };
 
@@ -194,31 +239,47 @@ const actionCreators = {
  */
 const loadStateFromStorage = () => {
   try {
-    // Load step from localStorage
     const savedStep = localStorage.getItem(STORAGE_KEYS.RESUME_STEP);
-    const step = savedStep ? JSON.parse(savedStep) : initialState.step;
-    
-    // Load resume data from localStorage
+    const parsedStep = savedStep ? JSON.parse(savedStep) : null;
+
     const savedResumeData = localStorage.getItem(STORAGE_KEYS.RESUME_DATA);
-    const resumeData = savedResumeData ? JSON.parse(savedResumeData) : initialState.resumeData;
-    
-    // Load resume analysis from localStorage
+    const parsedResumeData = savedResumeData ? JSON.parse(savedResumeData) : initialState.resumeData;
+    const resumeData = ensureResumeIds(parsedResumeData, { generateMissing: false });
+
     const savedAnalysis = localStorage.getItem(STORAGE_KEYS.RESUME_ANALYSIS);
     const resumeAnalysis = savedAnalysis ? JSON.parse(savedAnalysis) : initialState.resumeAnalysis;
-    
-    // Load improvements from localStorage
+
     const savedImprovements = localStorage.getItem(STORAGE_KEYS.RESUME_IMPROVEMENTS);
     const improvements = savedImprovements ? JSON.parse(savedImprovements) : initialState.improvements;
-    
+
+    const savedTarget = localStorage.getItem(STORAGE_KEYS.RESUME_TARGET);
+    const target = savedTarget ? JSON.parse(savedTarget) : {};
+
+    const savedProgress = localStorage.getItem(STORAGE_KEYS.RESUME_PROGRESS);
+    const progress = savedProgress ? JSON.parse(savedProgress) : {};
+
+    const hasData = resumeData?.bullet_points?.length > 0;
+    const migratedPhase = migrateSavedStep(parsedStep, hasData);
+    const resumablePhase = hasData
+      ? (migratedPhase === PHASES.UPLOAD ? PHASES.CONFIRM : migratedPhase)
+      : null;
+
     return {
       ...initialState,
-      step,
+      // Always land on upload so returning users choose continue vs start over
+      step: PHASES.UPLOAD,
+      resumablePhase,
       resumeData,
       resumeAnalysis,
       improvements,
-      // Don't restore selection state to avoid potential errors
+      targetRole: target.targetRole || '',
+      jobDescriptions: hydrateJobDescriptionFields(target),
+      analysisTargetKey: target.analysisTargetKey || null,
+      savedBullets: progress.savedBullets || {},
+      skippedBullets: progress.skippedBullets || {},
+      originalBullets: progress.originalBullets || {},
       currentJobIndex: null,
-      currentBulletIndex: null
+      currentBulletIndex: null,
     };
   } catch (error) {
     console.error('Error loading state from localStorage:', error);
@@ -231,7 +292,7 @@ export function ResumeProvider({ children }) {
   // Initialize state from localStorage or use initialState as fallback
   const [state, dispatch] = useReducer(resumeReducer, loadStateFromStorage());
   const resumeService = useResumeService();
-  
+
   // Create bound action dispatchers
   const actions = Object.entries(actionCreators).reduce((acc, [key, actionCreator]) => {
     acc[key] = (...args) => dispatch(actionCreator(...args));
@@ -240,8 +301,9 @@ export function ResumeProvider({ children }) {
 
   // Helper function to calculate a unique ID for each bullet point
   const getBulletId = useCallback((jobIndex, bulletIndex) => {
-    return `job${jobIndex}-bullet${bulletIndex}`;
-  }, []);
+    const job = state.resumeData.bullet_points[jobIndex];
+    return getStableBulletId(job, jobIndex, bulletIndex);
+  }, [state.resumeData]);
 
   // Helper function to get current bullet ID
   const getCurrentBulletId = useCallback(() => {
@@ -254,86 +316,60 @@ export function ResumeProvider({ children }) {
     try {
       // Reset analysis-related state
       actions.setResumeAnalysis(null);
+      actions.setAnalysisTargetKey(null);
       actions.setCurrentJobIndex(null);
       actions.setCurrentBulletIndex(null);
-      actions.setImprovements({});
-      actions.setSavedBullets({});
-      
+        actions.setImprovements({});
+        actions.setSavedBullets({});
+        actions.setSkippedBullets({});
+        actions.setOriginalBullets({});
+
       const result = await resumeService.parseResume(file);
-      
+
       // Handle structured data format
-      if (result.parsedData && result.parsedData.bullet_points) {
-        actions.setResumeData(result.parsedData);
-        actions.setFlatBulletPoints(result.bulletPoints || []);
-        
-        // Store original bullets
-        const originalBulletsMap = {};
-        result.parsedData.bullet_points.forEach((job, jobIndex) => {
-          job.achievements?.forEach((bullet, bulletIndex) => {
-            const bulletId = getBulletId(jobIndex, bulletIndex);
-            originalBulletsMap[bulletId] = bullet;
-          });
-        });
-        actions.setOriginalBullets(originalBulletsMap);
-        
+        if (result.parsedData && result.parsedData.bullet_points) {
+          const structuredData = ensureResumeIds(result.parsedData, { generateMissing: true });
+          actions.setResumeData(structuredData);
+          actions.setFlatBulletPoints(result.bulletPoints || []);
+          actions.setOriginalBullets(buildOriginalBulletsMap(structuredData));
+
         // Check if we have any bullet points
         const totalBullets = result.parsedData.bullet_points.reduce(
           (sum, job) => sum + (job.achievements?.length || 0), 0
         );
-        
+
         if (totalBullets === 0) {
-          resumeService.setErrors(prev => ({ 
-            ...prev, 
-            parse: "No bullet points were extracted from your resume. Please try a different file." 
+          resumeService.setErrors(prev => ({
+            ...prev,
+            parse: "No bullet points were extracted from your resume. Please try a different file."
           }));
           return false;
         }
-      } 
+      }
       // Handle legacy flat format
       else if (result.bulletPoints && result.bulletPoints.length > 0) {
         actions.setFlatBulletPoints(result.bulletPoints);
-        
+
         // Create a structured format from the flat list
-        const structuredData = createStructuredDataFromFlatBullets(result.bulletPoints);
-        actions.setResumeData(structuredData);
-        
-        // Store original bullets
-        const originalBulletsMap = {};
-        structuredData.bullet_points.forEach((job, jobIndex) => {
-          job.achievements?.forEach((bullet, bulletIndex) => {
-            const bulletId = getBulletId(jobIndex, bulletIndex);
-            originalBulletsMap[bulletId] = bullet;
-          });
-        });
-        actions.setOriginalBullets(originalBulletsMap);
-      } 
+          const structuredData = ensureResumeIds(
+            createStructuredDataFromFlatBullets(result.bulletPoints),
+            { generateMissing: true }
+          );
+          actions.setResumeData(structuredData);
+          actions.setOriginalBullets(buildOriginalBulletsMap(structuredData));
+      }
       else {
-        resumeService.setErrors(prev => ({ 
-          ...prev, 
-          parse: "Failed to extract any content from your resume. Please try a different file format." 
+        resumeService.setErrors(prev => ({
+          ...prev,
+          parse: "Failed to extract any content from your resume. Please try a different file format."
         }));
         return false;
       }
-      
+
       actions.setResumeEdited(false);
-      
-      // Start background analysis
-      resumeService.setLoading(prev => ({ ...prev, analyze: true }));
-      
-      // Use the structured data created earlier or the parsed data
-      const structuredData = result.parsedData ? null : createStructuredDataFromFlatBullets(result.bulletPoints || []);
-      const dataToAnalyze = result.parsedData || structuredData;
-      resumeService.analyzeResume(dataToAnalyze)
-        .then(analysis => {
-          if (analysis) {
-            actions.setResumeAnalysis(analysis);
-          }
-        })
-        .catch(error => {
-          console.error("Background analysis error:", error);
-        });
-      
-      actions.setStep(2);
+      actions.setResumablePhase(null);
+
+      actions.setStep(PHASES.CONFIRM);
       return true;
     } catch (error) {
       console.error("Error parsing resume:", error);
@@ -346,16 +382,16 @@ export function ResumeProvider({ children }) {
   const createStructuredDataFromFlatBullets = (flatBullets) => {
     const structuredData = { bullet_points: [] };
     let currentJob = null;
-    
+
     for (const bullet of flatBullets) {
       // Check if this is a position/job header
-      if (bullet.startsWith("POSITION:") || bullet.includes(" at ")) {
+      if (bullet.startsWith("POSITION:") || bullet.includes(" at")) {
         let position = "Unknown Position";
         let company = "Unknown Company";
         let timePeriod = "";
-        
+
         const positionLine = bullet.replace("POSITION:", "").trim();
-        
+
         const positionMatch = positionLine.match(/(.+?)\s+at\s+(.+?)(?:\s+\((.+?)\))?$/);
         if (positionMatch) {
           position = positionMatch[1].trim();
@@ -364,16 +400,16 @@ export function ResumeProvider({ children }) {
         } else {
           position = positionLine;
         }
-        
+
         currentJob = {
           company,
           position,
           time_period: timePeriod,
           achievements: []
         };
-        
+
         structuredData.bullet_points.push(currentJob);
-      } 
+      }
       // If it's a bullet point and we have a current job, add it as an achievement
       else if (currentJob && (bullet.startsWith("•") || bullet.startsWith("-") || bullet.startsWith("*") || /^\d+\./.test(bullet))) {
         const cleanBullet = bullet.replace(/^[•\-*]\s*/, "").trim();
@@ -390,7 +426,7 @@ export function ResumeProvider({ children }) {
         structuredData.bullet_points.push(currentJob);
       }
     }
-    
+
     // If we didn't find any structured data, create a default job with all bullets
     if (structuredData.bullet_points.length === 0 && flatBullets.length > 0) {
       structuredData.bullet_points.push({
@@ -400,7 +436,7 @@ export function ResumeProvider({ children }) {
         achievements: flatBullets.map(b => b.replace(/^[•\-*]\s*/, "").trim())
       });
     }
-    
+
     return structuredData;
   };
 
@@ -411,13 +447,13 @@ export function ResumeProvider({ children }) {
       console.log(`Reusing in-progress request for bullet ${bulletId}`);
       return state.inProgressRequests[bulletId].promise;
     }
-    
+
     // Create a new promise that will wrap our underlying API promise
     // This allows us to properly handle both successful and error cases
     const wrappedPromise = new Promise((resolve, reject) => {
       // Execute the actual async operation
       const originalPromise = promiseFn();
-      
+
       originalPromise
         .then(result => {
           console.log(`Request for bullet ${bulletId} completed successfully`);
@@ -432,47 +468,80 @@ export function ResumeProvider({ children }) {
           dispatch(actionCreators.completeRequest(bulletId));
         });
     });
-    
+
     // Store the wrapped promise in state for deduplication
     dispatch(actionCreators.startRequest(bulletId, wrappedPromise));
-    
+
     return wrappedPromise;
   }, [state.inProgressRequests, dispatch]);
+
+  const buildRewriteContext = useCallback((bulletId, currentJob, extraUserContext = '') => {
+    const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
+    const userContext = extraUserContext || Object.values(state.additionalContexts[bulletId] || {}).join(' ');
+    const targetContext = buildTargetContext(state.targetRole, state.jobDescriptions);
+    const bulletText = currentJob?.achievements?.[state.currentBulletIndex] || '';
+    const ranked = listRankedBullets(state.resumeData, {
+      targetRole: state.targetRole,
+      jobDescriptions: state.jobDescriptions,
+    });
+    const rankedBullet = ranked.find((item) => item.bulletId === bulletId);
+    const tasks = buildInsightTasks(state.resumeData, state.resumeAnalysis, {
+      targetRole: state.targetRole,
+      jobDescriptions: state.jobDescriptions,
+      savedBullets: state.savedBullets,
+      skippedBullets: state.skippedBullets,
+    });
+    const insightContext = buildInsightContext(getGuideForBullet(
+      { bulletId, text: bulletText, reasons: rankedBullet?.reasons || [] },
+      {
+        analysis: state.resumeAnalysis,
+        improvement: state.improvements[bulletId],
+        tasks,
+      }
+    ));
+    return [jobContext && `Job:\n${jobContext}`, targetContext && `Target:\n${targetContext}`, insightContext && `Gaps to address:\n${insightContext}`, userContext && `User-provided facts:\n${userContext}`].filter(Boolean).join('\n\n');
+  }, [
+    state.additionalContexts,
+    state.currentBulletIndex,
+    state.improvements,
+    state.jobDescriptions,
+    state.resumeAnalysis,
+    state.resumeData,
+    state.savedBullets,
+    state.skippedBullets,
+    state.targetRole,
+  ]);
 
   // Function to get bullet point improvements
   const handleBulletPointImprovement = useCallback(async (customRequestId = null) => {
     const currentBulletId = getCurrentBulletId();
     if (!currentBulletId) return null;
-    
+
     // Generate a request ID - use custom ID if provided (for new variations)
     // Otherwise use the bulletId for standard improvements
     const requestId = customRequestId || currentBulletId;
-    
+
     // For standard requests (not variations/context submissions):
     // Check if we already have data for this bullet point
     if (!customRequestId) {
       const existingImprovement = state.improvements[currentBulletId];
-      if (existingImprovement && existingImprovement.success) {
+      if (existingImprovement && existingImprovement.improvedBulletPoint) {
         console.log(`Using existing improvement data for bullet ${currentBulletId}`);
         return existingImprovement;
       }
     }
-    
+
     // Check if this exact request is already being processed (StrictMode protection)
     if (state.inProgressRequests[requestId]) {
       console.log(`Request ${requestId} already in progress, reusing request`);
       return state.inProgressRequests[requestId].promise;
     }
-    
+
     // Extract data needed for the request outside the promise function
     const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
-    
-    // Include job context in the additional context
-    const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-    const userContext = Object.values(state.additionalContexts[currentBulletId] || {}).join(' ');
-    const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-    
+    const contextToSend = buildRewriteContext(currentBulletId, currentJob);
+
     // Log what type of request this is
     if (customRequestId) {
       if (customRequestId.includes('variation')) {
@@ -485,30 +554,29 @@ export function ResumeProvider({ children }) {
     } else {
       console.log(`Standard improvement request for bullet ${currentBulletId}`);
     }
-    
+
     // Create the shared promise using the appropriate request ID
     return createSharedBulletPromise(requestId, async () => {
       try {
         console.log(`Starting improvement request for bullet ${currentBulletId}`);
-        
+
         // Pass the bulletId for bullet-specific loading state tracking
         const suggestions = await resumeService.getAISuggestions(
-          currentBullet, 
+          currentBullet,
           contextToSend,
           currentBulletId // Pass the bulletId for service-level deduplication
         );
-        
+
         if (suggestions) {
-          dispatch({ 
-            type: ActionTypes.UPDATE_IMPROVEMENT, 
-            payload: { bulletId: currentBulletId, improvement: suggestions }
+          const existing = state.improvements[currentBulletId];
+          const improvement = existing?.followUpQuestions?.length
+            ? { ...suggestions, followUpQuestions: existing.followUpQuestions }
+            : suggestions;
+          dispatch({
+            type: ActionTypes.UPDATE_IMPROVEMENT,
+            payload: { bulletId: currentBulletId, improvement }
           });
-          
-          dispatch({ 
-            type: ActionTypes.SET_SHOW_FOLLOW_UP, 
-            payload: { ...state.showFollowUpForBullets, [currentBulletId]: true }
-          });
-          
+
           return suggestions;
         }
         return null;
@@ -518,25 +586,91 @@ export function ResumeProvider({ children }) {
       }
     });
   }, [
-    state.resumeData, 
-    state.currentJobIndex, 
-    state.currentBulletIndex, 
-    state.additionalContexts, 
-    state.showFollowUpForBullets,
+    state.resumeData,
+    state.currentJobIndex,
+    state.currentBulletIndex,
+    state.additionalContexts,
     state.improvements,
     state.inProgressRequests,
+    state.targetRole,
+    state.jobDescriptions,
     resumeService,
     getCurrentBulletId,
-    createSharedBulletPromise
+    createSharedBulletPromise,
+    buildRewriteContext,
+  ]);
+
+  const handleBulletDetails = useCallback(async () => {
+    const currentBulletId = getCurrentBulletId();
+    if (!currentBulletId) return null;
+
+    const requestId = `${currentBulletId}-details`;
+    if (state.inProgressRequests[requestId]) {
+      return state.inProgressRequests[requestId].promise;
+    }
+
+    const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
+    const currentBullet = currentJob.achievements[state.currentBulletIndex];
+    const contextToSend = buildRewriteContext(currentBulletId, currentJob);
+
+    return createSharedBulletPromise(requestId, async () => {
+      const applyQuestions = (questions, remainingWeaknesses = '') => {
+        const followUpQuestions = questions.length ? questions : FALLBACK_DETAIL_QUESTIONS;
+        dispatch({
+          type: ActionTypes.UPDATE_IMPROVEMENT,
+          payload: {
+            bulletId: currentBulletId,
+            improvement: {
+              followUpQuestions,
+              remainingWeaknesses,
+              detailsRequested: true,
+            },
+          },
+        });
+        dispatch({
+          type: ActionTypes.SET_SHOW_FOLLOW_UP,
+          payload: { ...state.showFollowUpForBullets, [currentBulletId]: true },
+        });
+        return followUpQuestions;
+      };
+
+      try {
+        const result = await resumeService.getAISuggestions(
+          currentBullet,
+          contextToSend,
+          `${currentBulletId}-details`,
+          { task: 'details' }
+        );
+        const questions = Array.isArray(result?.followUpQuestions)
+          ? result.followUpQuestions.map((question) => String(question || '').trim()).filter(Boolean)
+          : [];
+        return applyQuestions(questions, result?.remainingWeaknesses || '');
+      } catch (error) {
+        console.error(`Error getting follow-up questions for bullet ${currentBulletId}:`, error);
+        return applyQuestions(FALLBACK_DETAIL_QUESTIONS);
+      }
+    });
+  }, [
+    state.resumeData,
+    state.currentJobIndex,
+    state.currentBulletIndex,
+    state.showFollowUpForBullets,
+    state.inProgressRequests,
+    state.targetRole,
+    state.jobDescriptions,
+    resumeService,
+    getCurrentBulletId,
+    createSharedBulletPromise,
+    buildRewriteContext,
   ]);
 
   // Function to handle additional context for a bullet point
   const handleAdditionalContextChange = useCallback((questionIndex, value) => {
     const bulletId = getCurrentBulletId();
     if (!bulletId) return;
-    
-    dispatch({ 
-      type: ActionTypes.SET_ADDITIONAL_CONTEXTS, 
+
+    dispatch({
+      type: ActionTypes.SET_ADDITIONAL_CONTEXTS,
       payload: {
         ...state.additionalContexts,
         [bulletId]: {
@@ -551,42 +685,46 @@ export function ResumeProvider({ children }) {
   const handleAdditionalContextSubmit = useCallback(async () => {
     const bulletId = getCurrentBulletId();
     if (!bulletId) return null;
-    
+
     // Generate a unique request ID for this context submission
     // This allows multiple context submissions for the same bullet
     const contextRequestId = `${bulletId}-context-${Date.now()}`;
-    
+
     // Check if this bullet is already being processed (StrictMode protection)
     if (state.inProgressRequests[contextRequestId]) {
       console.log(`Context submission already in progress for ${contextRequestId}, reusing request`);
       return state.inProgressRequests[contextRequestId].promise;
     }
-    
+
     // Extract data needed for the request outside the promise function
     const currentJob = state.resumeData.bullet_points[state.currentJobIndex];
     const currentBullet = currentJob.achievements[state.currentBulletIndex];
-    
-    // Include job context in the additional context
-    const jobContext = `This is for a ${currentJob.position} role at ${currentJob.company} during ${currentJob.time_period || 'unknown time period'}.`;
-    const userContext = Object.values(state.additionalContexts[bulletId] || {}).join(' ');
-    const contextToSend = [jobContext, userContext].filter(Boolean).join(' ');
-    
+    const contextToSend = buildRewriteContext(
+      bulletId,
+      currentJob,
+      Object.values(state.additionalContexts[bulletId] || {}).join(' ')
+    );
+
     // Create the shared promise for this context submission
     return createSharedBulletPromise(contextRequestId, async () => {
       try {
         console.log(`Starting context submission for bullet ${bulletId}`);
-        
+
         // Pass the bulletId for bullet-specific loading state tracking
         const newSuggestions = await resumeService.getAISuggestions(
-          currentBullet, 
+          currentBullet,
           contextToSend,
           bulletId // Pass the bulletId for service-level deduplication
         );
-        
+
         if (newSuggestions) {
-          dispatch({ 
-            type: ActionTypes.UPDATE_IMPROVEMENT, 
-            payload: { bulletId, improvement: newSuggestions }
+          const existing = state.improvements[bulletId];
+          const improvement = existing?.followUpQuestions?.length
+            ? { ...newSuggestions, followUpQuestions: existing.followUpQuestions }
+            : newSuggestions;
+          dispatch({
+            type: ActionTypes.UPDATE_IMPROVEMENT,
+            payload: { bulletId, improvement }
           });
           return newSuggestions;
         }
@@ -597,31 +735,35 @@ export function ResumeProvider({ children }) {
       }
     });
   }, [
-    state.resumeData, 
-    state.currentJobIndex, 
-    state.currentBulletIndex, 
+    state.resumeData,
+    state.currentJobIndex,
+    state.currentBulletIndex,
     state.additionalContexts,
+    state.improvements,
     state.inProgressRequests,
+    state.targetRole,
+    state.jobDescriptions,
     resumeService,
     getCurrentBulletId,
-    createSharedBulletPromise
+    createSharedBulletPromise,
+    buildRewriteContext,
   ]);
 
   // Function to navigate between bullet points
   const navigateBulletPoints = useCallback((direction) => {
     const jobs = state.resumeData.bullet_points;
     if (jobs.length === 0) return;
-    
+
     // If no current selection, select the first bullet of the first job
     if (state.currentJobIndex === null || state.currentBulletIndex === null) {
       dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: 0 });
       dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: 0 });
       return;
     }
-    
+
     const currentJob = jobs[state.currentJobIndex];
     if (!currentJob || !currentJob.achievements) return;
-    
+
     if (direction === 'next') {
       // If not at the last bullet point in the current job
       if (state.currentBulletIndex < currentJob.achievements.length - 1) {
@@ -634,8 +776,7 @@ export function ResumeProvider({ children }) {
       }
       // At the very last bullet point
       else {
-        // Move to final review
-        dispatch({ type: ActionTypes.SET_STEP, payload: 4 });
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.REVIEW });
       }
     } else if (direction === 'prev') {
       // If not at the first bullet point in the current job
@@ -646,11 +787,11 @@ export function ResumeProvider({ children }) {
       else if (state.currentJobIndex > 0) {
         const prevJobIndex = state.currentJobIndex - 1;
         dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: prevJobIndex });
-        
+
         const prevJob = jobs[prevJobIndex];
         if (prevJob && prevJob.achievements) {
-          dispatch({ 
-            type: ActionTypes.SET_CURRENT_BULLET_INDEX, 
+          dispatch({
+            type: ActionTypes.SET_CURRENT_BULLET_INDEX,
             payload: Math.max(0, prevJob.achievements.length - 1)
           });
         }
@@ -665,141 +806,148 @@ export function ResumeProvider({ children }) {
 
   // Function to get resume analysis - with flag to prevent multiple calls
   const getResumeAnalysis = useCallback(async () => {
-    // Use loading state to prevent duplicate requests
-    if (resumeService.loading.analyze) {
+    const targetKey = analysisContextKey(state.targetRole, state.jobDescriptions);
+    if (resumeService.loading.analyze && state.analysisTargetKey === targetKey) {
       console.log("Analysis already in progress, skipping duplicate request");
       return;
     }
-    
-    // Don't run analysis if we already have it, unless resumeEdited is true
-    if (!state.resumeAnalysis || state.resumeEdited) {
-      try {
-        const analysis = await resumeService.analyzeResume(state.resumeData);
-        if (analysis) {
-          dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis });
-          
-          // Reset the edited flag after triggering a re-analysis
-          if (state.resumeEdited) {
-            dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: false });
-          }
-        }
-      } catch (error) {
-        console.error("Error getting resume analysis:", error);
-      }
-    }
-  }, [state.resumeAnalysis, state.resumeEdited, state.resumeData, resumeService, dispatch]);
 
-  // Function to handle step navigation
-  const handleStepNavigation = useCallback((newStep) => {
-    // Check if step should be accessible
-    // Exception for step 1 (upload) which should always be accessible
-    if (newStep > 1 && state.resumeData.bullet_points.length === 0) {
-      // Can't navigate to steps that require resume data
-      console.log("Navigation blocked: Resume data required for step", newStep);
+    if (state.resumeAnalysis && !state.resumeEdited && state.analysisTargetKey === targetKey) {
       return;
     }
 
-    if (newStep === 2.5 && (!state.resumeAnalysis || state.resumeEdited)) {
-      // Trigger analysis when navigating directly to analysis step
-      // Only if we don't already have an analysis or if the resume was edited
-      getResumeAnalysis();
-    }
+    try {
+      const analysis = await resumeService.analyzeResume(state.resumeData, {
+        targetRole: state.targetRole,
+        jobDescriptions: state.jobDescriptions,
+      });
+      if (analysis) {
+        dispatch({ type: ActionTypes.SET_RESUME_ANALYSIS, payload: analysis });
+        dispatch({ type: ActionTypes.SET_ANALYSIS_TARGET_KEY, payload: targetKey });
 
-    // Special case for moving back to bullet improvement from final review
-    if (state.step === 4 && newStep === 3) {
-      // Go to the last bullet point
+        if (state.resumeEdited) {
+          dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: false });
+        }
+      }
+    } catch (error) {
+      console.error("Error getting resume analysis:", error);
+    }
+  }, [state.resumeAnalysis, state.resumeEdited, state.resumeData, state.targetRole, state.jobDescriptions, state.analysisTargetKey, resumeService, dispatch]);
+
+  const selectFirstBullet = useCallback(() => {
+    const ranked = listRankedBullets(state.resumeData, {
+      targetRole: state.targetRole,
+      jobDescriptions: state.jobDescriptions,
+    });
+    const top = getTopUnsaved(ranked, state.savedBullets, state.skippedBullets, 1)[0] || ranked[0];
+    if (top) {
+      dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: top.jobIndex });
+      dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: top.bulletIndex });
+    }
+  }, [state.resumeData, state.targetRole, state.jobDescriptions, state.savedBullets, state.skippedBullets, dispatch]);
+
+  const selectLastBullet = useCallback(() => {
       const jobs = state.resumeData.bullet_points;
-      if (jobs.length > 0) {
+    if (jobs.length === 0) return;
         const lastJobIndex = jobs.length - 1;
         const lastJob = jobs[lastJobIndex];
         if (lastJob && lastJob.achievements) {
           dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: lastJobIndex });
-          dispatch({ 
-            type: ActionTypes.SET_CURRENT_BULLET_INDEX, 
-            payload: Math.max(0, lastJob.achievements.length - 1)
-          });
+          dispatch({
+            type: ActionTypes.SET_CURRENT_BULLET_INDEX,
+        payload: Math.max(0, lastJob.achievements.length - 1),
+      });
+    }
+  }, [state.resumeData, dispatch]);
+
+  const selectBullet = useCallback((jobIndex, bulletIndex) => {
+    dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: jobIndex });
+    dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: bulletIndex });
+  }, [dispatch]);
+
+  // Function to handle step navigation
+  const handleStepNavigation = useCallback((newStep, selection = null) => {
+    if (!isValidPhase(newStep)) {
+      return;
+    }
+
+    if (newStep !== PHASES.UPLOAD && state.resumeData.bullet_points.length === 0) {
+      return;
+    }
+
+    if (newStep === PHASES.IMPROVE) {
+      if (selection?.first) {
+        selectFirstBullet();
+      } else if (selection && selection.jobIndex != null && selection.bulletIndex != null) {
+        dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: selection.jobIndex });
+        dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: selection.bulletIndex });
+      } else if (state.step === PHASES.REVIEW) {
+        if (state.currentJobIndex === null || state.currentBulletIndex === null) {
+          selectLastBullet();
         }
+      } else if (state.currentJobIndex === null || state.currentBulletIndex === null) {
+        selectFirstBullet();
       }
     }
 
-    console.log("Navigating to step:", newStep);
     dispatch({ type: ActionTypes.SET_STEP, payload: newStep });
-  }, [state.step, state.resumeData, state.resumeAnalysis, getResumeAnalysis, dispatch]);
+  }, [state.step, state.resumeData, state.currentJobIndex, state.currentBulletIndex, selectFirstBullet, selectLastBullet, dispatch]);
 
 
-  // Navigation functions
   const handleNavigation = useCallback((direction) => {
     if (direction === 'back') {
-      if (state.step === 1) {
-        // From upload back to feature selection
-        dispatch({ type: ActionTypes.SET_STEP, payload: 0 });
-      } else if (state.step === 2) {
-        // From overview back to upload
-        dispatch({ type: ActionTypes.SET_STEP, payload: 1 });
-      } else if (state.step === 2.5) {
-        // From analysis back to overview
-        dispatch({ type: ActionTypes.SET_STEP, payload: 2 });
-      } else if (state.step === 3) {
-        // From bullet improvement back to analysis
-        dispatch({ type: ActionTypes.SET_STEP, payload: 2.5 });
-      } else if (state.step === 4) {
-        // From final review back to bullet improvement
-        dispatch({ type: ActionTypes.SET_STEP, payload: 3 });
-        
-        // Go to the last bullet point
-        const jobs = state.resumeData.bullet_points;
-        if (jobs.length > 0) {
-          const lastJobIndex = jobs.length - 1;
-          const lastJob = jobs[lastJobIndex];
-          if (lastJob && lastJob.achievements) {
-            dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: lastJobIndex });
-            dispatch({ 
-              type: ActionTypes.SET_CURRENT_BULLET_INDEX, 
-              payload: Math.max(0, lastJob.achievements.length - 1)
-            });
-          }
-        }
-      } else if (state.step > 0) {
-        dispatch({ type: ActionTypes.SET_STEP, payload: state.step - 1 });
+      if (state.step === PHASES.REVIEW) {
+        selectLastBullet();
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.IMPROVE });
+        return;
+      }
+      if (state.step === PHASES.IMPROVE) {
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.INSIGHTS });
+        return;
+      }
+      if (state.step === PHASES.INSIGHTS) {
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.TARGET });
+        return;
+      }
+      if (state.step === PHASES.TARGET) {
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.CONFIRM });
+        return;
+      }
+      if (state.step === PHASES.CONFIRM) {
+        dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.UPLOAD });
       }
     } else if (direction === 'forward') {
-      if (state.step === 3) {
-        // If we're in the bullet improvement step and there's no selection yet,
-        // select the first bullet point of the first job
+      if (state.step === PHASES.IMPROVE) {
         if (state.currentJobIndex === null || state.currentBulletIndex === null) {
-          const jobs = state.resumeData.bullet_points;
-          if (jobs.length > 0) {
-            dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: 0 });
-            dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: 0 });
-          }
+          selectFirstBullet();
         } else {
           navigateBulletPoints('next');
         }
-      } else if (state.step < 4) {
-        // Handle special case for floating point step
-        if (state.step === 2.5) {
-          dispatch({ type: ActionTypes.SET_STEP, payload: 3 });
-          
-          // Initialize selection to first bullet if needed
-          if (state.currentJobIndex === null || state.currentBulletIndex === null) {
-            const jobs = state.resumeData.bullet_points;
-            if (jobs.length > 0) {
-              dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: 0 });
-              dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: 0 });
-            }
-          }
-        } else {
-          dispatch({ type: ActionTypes.SET_STEP, payload: state.step + 1 });
-        }
+        return;
+      }
+      if (state.step === PHASES.UPLOAD) {
+        handleStepNavigation(PHASES.CONFIRM);
+        return;
+      }
+      if (state.step === PHASES.CONFIRM) {
+        handleStepNavigation(PHASES.TARGET);
+        return;
+      }
+      if (state.step === PHASES.TARGET) {
+        handleStepNavigation(PHASES.INSIGHTS);
+        return;
+      }
+      if (state.step === PHASES.INSIGHTS) {
+        handleStepNavigation(PHASES.IMPROVE);
       }
     }
-  }, [state.step, state.resumeData, state.currentJobIndex, state.currentBulletIndex, navigateBulletPoints]);
+  }, [state.step, state.currentJobIndex, state.currentBulletIndex, navigateBulletPoints, selectFirstBullet, selectLastBullet, handleStepNavigation]);
 
   // Job editing functions
   const startEditingJob = useCallback((jobIndex) => {
     dispatch({ type: ActionTypes.SET_EDITING_JOB_INDEX, payload: jobIndex });
-    dispatch({ 
-      type: ActionTypes.SET_EDITING_JOB, 
+    dispatch({
+      type: ActionTypes.SET_EDITING_JOB,
       payload: { ...state.resumeData.bullet_points[jobIndex] }
     });
   }, [state.resumeData]);
@@ -808,12 +956,12 @@ export function ResumeProvider({ children }) {
     if (state.editingJob && state.editingJobIndex !== null) {
       const updatedJobs = [...state.resumeData.bullet_points];
       updatedJobs[state.editingJobIndex] = state.editingJob;
-      
-      dispatch({ 
-        type: ActionTypes.SET_RESUME_DATA, 
+
+      dispatch({
+        type: ActionTypes.SET_RESUME_DATA,
         payload: { ...state.resumeData, bullet_points: updatedJobs }
       });
-      
+
       dispatch({ type: ActionTypes.SET_EDITING_JOB_INDEX, payload: null });
       dispatch({ type: ActionTypes.SET_EDITING_JOB, payload: null });
       dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: true });
@@ -822,8 +970,8 @@ export function ResumeProvider({ children }) {
 
   // Bullet point editing functions
   const startEditingBullet = useCallback((jobIndex, bulletIndex, bulletText) => {
-    dispatch({ 
-      type: ActionTypes.SET_EDITING_BULLET_INFO, 
+    dispatch({
+      type: ActionTypes.SET_EDITING_BULLET_INFO,
       payload: { jobIndex, bulletIndex }
     });
     dispatch({ type: ActionTypes.SET_EDITED_BULLET, payload: bulletText });
@@ -833,17 +981,17 @@ export function ResumeProvider({ children }) {
     if (state.editingBulletInfo.jobIndex !== null && state.editingBulletInfo.bulletIndex !== null) {
       const updatedJobs = [...state.resumeData.bullet_points];
       updatedJobs[state.editingBulletInfo.jobIndex].achievements[state.editingBulletInfo.bulletIndex] = state.editedBullet;
-      
-      dispatch({ 
-        type: ActionTypes.SET_RESUME_DATA, 
+
+      dispatch({
+        type: ActionTypes.SET_RESUME_DATA,
         payload: { ...state.resumeData, bullet_points: updatedJobs }
       });
-      
-      dispatch({ 
-        type: ActionTypes.SET_EDITING_BULLET_INFO, 
+
+      dispatch({
+        type: ActionTypes.SET_EDITING_BULLET_INFO,
         payload: { jobIndex: null, bulletIndex: null }
       });
-      
+
       dispatch({ type: ActionTypes.SET_EDITED_BULLET, payload: "" });
       dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: true });
     }
@@ -852,49 +1000,139 @@ export function ResumeProvider({ children }) {
   // Save an improved bullet point
   const saveBulletPoint = useCallback((bulletId, improvedText) => {
     if (!bulletId) return;
-    
-    // Update the resume data with the improved bullet point
+
     const updatedJobs = [...state.resumeData.bullet_points];
     updatedJobs[state.currentJobIndex].achievements[state.currentBulletIndex] = improvedText;
-    
-    dispatch({ 
-      type: ActionTypes.SET_RESUME_DATA, 
+
+    dispatch({
+      type: ActionTypes.SET_RESUME_DATA,
       payload: { ...state.resumeData, bullet_points: updatedJobs }
     });
-    
-    // Mark this bullet as saved
-    dispatch({ 
-      type: ActionTypes.SET_SAVED_BULLETS, 
+
+    dispatch({
+      type: ActionTypes.SET_SAVED_BULLETS,
       payload: { ...state.savedBullets, [bulletId]: true }
     });
-    
-    return true;
-  }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex, state.savedBullets]);
 
-  // Export the resume
-  const handleExportResume = useCallback(async () => {
-    // Collect all improved bullets organized by job
-    const improvedResumeData = {
-      bullet_points: state.resumeData.bullet_points.map((job, jobIndex) => ({
-        ...job,
-        achievements: job.achievements?.map((bullet, bulletIndex) => {
-          const bulletId = getBulletId(jobIndex, bulletIndex);
-          return state.improvements[bulletId]?.improvedBulletPoint || bullet;
-        })
-      }))
-    };
-    
-    // For backward compatibility, create a flat array of bullet points
-    const flatBullets = [];
-    improvedResumeData.bullet_points.forEach(job => {
-      flatBullets.push(`POSITION: ${job.position} at ${job.company} (${job.time_period || 'N/A'})`);
-      job.achievements?.forEach(bullet => {
-        flatBullets.push(`• ${bullet.startsWith('•') ? bullet.substring(1).trim() : bullet}`);
-      });
+    if (state.skippedBullets[bulletId]) {
+      const nextSkipped = { ...state.skippedBullets };
+      delete nextSkipped[bulletId];
+      dispatch({ type: ActionTypes.SET_SKIPPED_BULLETS, payload: nextSkipped });
+    }
+
+    return true;
+  }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex, state.savedBullets, state.skippedBullets]);
+
+  const skipBullet = useCallback((bulletId) => {
+    if (!bulletId) return;
+    dispatch({
+      type: ActionTypes.SET_SKIPPED_BULLETS,
+      payload: { ...state.skippedBullets, [bulletId]: true },
     });
-    
-    return await resumeService.exportResume(flatBullets);
-  }, [state.resumeData, state.improvements, getBulletId, resumeService]);
+  }, [state.skippedBullets]);
+
+  const skipRestOfRole = useCallback(() => {
+    const job = state.resumeData.bullet_points[state.currentJobIndex];
+    if (!job) return;
+    const nextSkipped = { ...state.skippedBullets };
+    (job.achievements || []).forEach((_, bulletIndex) => {
+      if (bulletIndex >= (state.currentBulletIndex || 0)) {
+        const bulletId = getBulletId(state.currentJobIndex, bulletIndex);
+        if (!state.savedBullets[bulletId]) {
+          nextSkipped[bulletId] = true;
+        }
+      }
+    });
+    dispatch({ type: ActionTypes.SET_SKIPPED_BULLETS, payload: nextSkipped });
+
+    const jobs = state.resumeData.bullet_points;
+    if (state.currentJobIndex < jobs.length - 1) {
+      dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: state.currentJobIndex + 1 });
+      dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: 0 });
+    } else {
+      dispatch({ type: ActionTypes.SET_STEP, payload: PHASES.REVIEW });
+    }
+  }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex, state.skippedBullets, state.savedBullets, getBulletId]);
+
+  const applyResumeEdit = useCallback((nextData, extraOriginals = {}) => {
+    dispatch({
+      type: ActionTypes.SET_RESUME_DATA,
+      payload: nextData,
+    });
+    if (Object.keys(extraOriginals).length > 0) {
+      dispatch({
+        type: ActionTypes.SET_ORIGINAL_BULLETS,
+        payload: { ...state.originalBullets, ...extraOriginals },
+      });
+    }
+    dispatch({ type: ActionTypes.SET_RESUME_EDITED, payload: true });
+  }, [state.originalBullets]);
+
+  const addJob = useCallback(() => {
+    const nextData = addJobToResume(state.resumeData);
+    const newJob = nextData.bullet_points[nextData.bullet_points.length - 1];
+    const extra = {};
+    newJob.achievementIds.forEach((id, index) => {
+      extra[id] = newJob.achievements[index] || '';
+    });
+    applyResumeEdit(nextData, extra);
+  }, [state.resumeData, applyResumeEdit]);
+
+  const addBullet = useCallback((jobIndex) => {
+    const nextData = addBulletToJob(state.resumeData, jobIndex);
+    const job = nextData.bullet_points[jobIndex];
+    const lastIndex = job.achievements.length - 1;
+    const bulletId = getStableBulletId(job, jobIndex, lastIndex);
+    applyResumeEdit(nextData, { [bulletId]: job.achievements[lastIndex] || '' });
+  }, [state.resumeData, applyResumeEdit]);
+
+  const removeBullet = useCallback((jobIndex, bulletIndex) => {
+    applyResumeEdit(removeBulletFromJob(state.resumeData, jobIndex, bulletIndex));
+    if (state.currentJobIndex === jobIndex && state.currentBulletIndex === bulletIndex) {
+      dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: Math.max(0, bulletIndex - 1) });
+    }
+  }, [state.resumeData, applyResumeEdit, state.currentJobIndex, state.currentBulletIndex]);
+
+  const removeJob = useCallback((jobIndex) => {
+    applyResumeEdit(removeJobFromResume(state.resumeData, jobIndex));
+    if (state.currentJobIndex === jobIndex) {
+      dispatch({ type: ActionTypes.SET_CURRENT_JOB_INDEX, payload: null });
+      dispatch({ type: ActionTypes.SET_CURRENT_BULLET_INDEX, payload: null });
+    }
+  }, [state.resumeData, applyResumeEdit, state.currentJobIndex]);
+
+  const getRewrittenResumeText = useCallback(() => {
+    return formatRewrittenResumeText(state.resumeData, state.improvements);
+  }, [state.resumeData, state.improvements]);
+
+  const copyRewrittenBullets = useCallback(async () => {
+    const text = getRewrittenResumeText();
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (error) {
+      console.error('Error copying rewritten bullets:', error);
+      return false;
+    }
+  }, [getRewrittenResumeText]);
+
+  const downloadRewrittenAsText = useCallback(() => {
+    const text = getRewrittenResumeText();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'resume-rewrite-pack.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return true;
+  }, [getRewrittenResumeText]);
+
+  const handleExportResume = useCallback(async () => {
+    return downloadRewrittenAsText();
+  }, [downloadRewrittenAsText]);
 
   // Functions to get totals and current position
   const getTotalBulletPoints = useCallback(() => {
@@ -906,11 +1144,11 @@ export function ResumeProvider({ children }) {
   const getCurrentBulletPointNumber = useCallback(() => {
     let count = 0;
     const jobs = state.resumeData.bullet_points;
-    
+
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
       if (!job.achievements) continue;
-      
+
       if (i < state.currentJobIndex) {
         count += job.achievements.length;
       } else if (i === state.currentJobIndex) {
@@ -918,7 +1156,7 @@ export function ResumeProvider({ children }) {
         break;
       }
     }
-    
+
     return count;
   }, [state.resumeData, state.currentJobIndex, state.currentBulletIndex]);
 
@@ -945,7 +1183,7 @@ export function ResumeProvider({ children }) {
         console.log("Cleaned up stale requests");
       }
     }, 10000); // Run every 10 seconds
-    
+
     // Clean up timer on unmount
     return () => clearInterval(cleanupTimer);
   }, [state.inProgressRequests, dispatch]);
@@ -955,25 +1193,37 @@ export function ResumeProvider({ children }) {
     try {
       // Save step
       localStorage.setItem(STORAGE_KEYS.RESUME_STEP, JSON.stringify(state.step));
-      
+
       // Save resume data only if we have actual data (bullet points)
       if (state.resumeData.bullet_points.length > 0) {
         localStorage.setItem(STORAGE_KEYS.RESUME_DATA, JSON.stringify(state.resumeData));
       }
-      
+
       // Save resume analysis
       if (state.resumeAnalysis) {
         localStorage.setItem(STORAGE_KEYS.RESUME_ANALYSIS, JSON.stringify(state.resumeAnalysis));
       }
-      
+
       // Save improvements if we have any
       if (Object.keys(state.improvements).length > 0) {
         localStorage.setItem(STORAGE_KEYS.RESUME_IMPROVEMENTS, JSON.stringify(state.improvements));
       }
+
+      localStorage.setItem(STORAGE_KEYS.RESUME_TARGET, JSON.stringify({
+        targetRole: state.targetRole,
+        jobDescriptions: state.jobDescriptions,
+        analysisTargetKey: state.analysisTargetKey,
+      }));
+
+      localStorage.setItem(STORAGE_KEYS.RESUME_PROGRESS, JSON.stringify({
+        savedBullets: state.savedBullets,
+        skippedBullets: state.skippedBullets,
+        originalBullets: state.originalBullets,
+      }));
     } catch (error) {
       console.error('Error saving state to localStorage:', error);
     }
-  }, [state.step, state.resumeData, state.resumeAnalysis, state.improvements]);
+  }, [state.step, state.resumeData, state.resumeAnalysis, state.analysisTargetKey, state.improvements, state.targetRole, state.jobDescriptions, state.savedBullets, state.skippedBullets, state.originalBullets]);
 
   // Clear storage and reset state
   const clearStorageAndResetState = useCallback(() => {
@@ -982,7 +1232,7 @@ export function ResumeProvider({ children }) {
       Object.values(STORAGE_KEYS).forEach(key => {
         localStorage.removeItem(key);
       });
-      
+
       // Reset state
       resetStateInternal();
     } catch (error) {
@@ -994,22 +1244,23 @@ export function ResumeProvider({ children }) {
   const value = {
     // State values
     ...state,
-    
+
     // Service methods
     ...resumeService,
-    
+
     // Action creators/dispatchers
     ...actions,
-    
+
     // Helper functions
     getBulletId,
     getCurrentBulletId,
     getTotalBulletPoints,
     getCurrentBulletPointNumber,
-    
+
     // Business logic methods
     handleFileUpload,
     handleBulletPointImprovement,
+    handleBulletDetails,
     handleAdditionalContextChange,
     handleAdditionalContextSubmit,
     navigateBulletPoints,
@@ -1021,8 +1272,20 @@ export function ResumeProvider({ children }) {
     startEditingBullet,
     saveEditedBullet,
     saveBulletPoint,
+    skipBullet,
+    skipRestOfRole,
+    addJob,
+    addBullet,
+    removeBullet,
+    removeJob,
     handleExportResume,
-    
+    getRewrittenResumeText,
+    copyRewrittenBullets,
+    downloadRewrittenAsText,
+    selectBullet,
+    selectFirstBullet,
+    selectLastBullet,
+
     // Storage management
     clearStorageAndResetState,
   };

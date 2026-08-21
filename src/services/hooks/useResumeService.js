@@ -136,7 +136,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
   // Create a request tracking system using a ref that persists between renders
   const pendingBulletRequests = { map: new Map() };
   
-  const getAISuggestions = useCallback(async (bulletPoint, additionalContext = "", bulletId = null) => {
+  const getAISuggestions = useCallback(async (bulletPoint, additionalContext = "", bulletId = null, requestOptions = {}) => {
     // Use bullet-level tracking if a bulletId is provided
     const operationKey = OPERATION_TYPES.IMPROVE;
     const requestKey = bulletId || `bullet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -154,7 +154,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
     const requestPromise = new Promise(async (resolve, reject) => {
       try {
         console.log(`[useResumeService] Requesting improvement for bullet ${requestKey}`);
-        const result = await apiService.getAISuggestions(bulletPoint, additionalContext);
+        const result = await apiService.getAISuggestions(bulletPoint, additionalContext, requestOptions);
         resolve(result);
       } catch (error) {
         console.error(`[useResumeService] Error improving bullet ${requestKey}:`, error);
@@ -180,7 +180,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
    * Get AI-powered comprehensive resume analysis
    * Supports polling for long-running operations with progress updates
    */
-  const analyzeResume = useCallback(async (resumeData) => {
+  const analyzeResume = useCallback(async (resumeData, targeting = {}) => {
     startOperation(OPERATION_TYPES.ANALYZE);
     
     try {
@@ -202,7 +202,9 @@ export const useResumeService = (apiService = ResumeAPI) => {
       // Call the API with polling enabled for this long-running operation
       return await apiService.analyzeResume(resumeData, { 
         longRunning: true,
-        onStatusUpdate
+        onStatusUpdate,
+        targetRole: targeting.targetRole,
+        jobDescriptions: targeting.jobDescriptions,
       });
     } catch (error) {
       console.error("Error in analyzeResume:", error);
@@ -264,7 +266,7 @@ export const useResumeService = (apiService = ResumeAPI) => {
   // Create a reference to track in-progress analytics requests
   const analyticsRequestRef = { inProgress: false, promise: null };
   
-  const getImprovementAnalytics = useCallback(async (resumeData, improvements, savedBullets) => {
+  const getImprovementAnalytics = useCallback(async (resumeData, improvements, savedBullets, targeting = {}) => {
     // Check if request is already in progress, if so, return the existing promise
     if (analyticsRequestRef.inProgress && analyticsRequestRef.promise) {
       console.log("[useResumeService] Analytics request already in progress, reusing promise");
@@ -298,7 +300,9 @@ export const useResumeService = (apiService = ResumeAPI) => {
         savedBullets, 
         {
           longRunning: true,
-          onStatusUpdate
+          onStatusUpdate,
+          targetRole: targeting.targetRole,
+          jobDescriptions: targeting.jobDescriptions,
         }
       );
       

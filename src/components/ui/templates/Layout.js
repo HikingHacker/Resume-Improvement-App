@@ -1,11 +1,10 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { cn } from '../utils/utils';
-import { ThemeToggle } from '../utils/ThemeProvider';
 
 /**
  * Layout component for consistent page structure
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Main content
  * @param {React.ReactNode} props.header - Header content
@@ -24,24 +23,19 @@ const Layout = ({
   fluid = false,
 }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       {header ? (
         header
       ) : (
-        <header className="bg-white dark:bg-gray-800 shadow-sm">
+        <header className="bg-white shadow-sm">
           <div className={fluid ? 'container-fluid px-4' : 'container mx-auto px-4'}>
-            <div className="flex justify-between items-center h-20">
-              <div className="flex items-center">
-                <img 
-                  src={`${process.env.PUBLIC_URL}/resume_dj_logo.png`}
-                  alt="Resume DJ Logo" 
-                  className="h-20 w-auto" 
-                />
-              </div>
-              <div>
-                <ThemeToggle />
-              </div>
+            <div className="flex items-center h-20">
+              <img
+                src={`${process.env.PUBLIC_URL}/resume_dj_logo.png`}
+                alt="Resume DJ Logo"
+                className="h-20 w-auto"
+              />
             </div>
           </div>
         </header>
@@ -51,7 +45,7 @@ const Layout = ({
       <main className="flex-grow flex">
         {/* Sidebar (if provided) */}
         {sidebar && (
-          <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm hidden md:block">
+          <aside className="w-64 bg-white shadow-sm hidden md:block">
             {sidebar}
           </aside>
         )}
@@ -68,9 +62,9 @@ const Layout = ({
       {footer ? (
         footer
       ) : (
-        <footer className="bg-white dark:bg-gray-800 shadow-sm">
+        <footer className="bg-white shadow-sm">
           <div className={fluid ? 'container-fluid px-4' : 'container mx-auto px-4'}>
-            <div className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div className="py-4 text-center text-sm text-gray-500">
               &copy; {new Date().getFullYear()} Resume DJ
             </div>
           </div>

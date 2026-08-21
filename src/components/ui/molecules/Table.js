@@ -4,18 +4,18 @@ import { cn } from '../utils/utils';
 
 /**
  * Table component that wraps all table elements
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Table content
  * @param {string} props.className - Additional CSS classes
  * @param {string} props.variant - Table style variant
  * @returns {JSX.Element} Table component
  */
-const Table = ({ 
-  children, 
-  className = '', 
-  variant = 'default', 
-  ...props 
+const Table = ({
+  children,
+  className = '',
+  variant = 'default',
+  ...props
 }) => {
   const variants = {
     default: '',
@@ -26,14 +26,14 @@ const Table = ({
 
   return (
     <div className="w-full overflow-auto rounded-lg">
-      <table 
+      <table
         className={cn(
-          "w-full border-collapse", 
-          variants[variant], 
+          "w-full border-collapse",
+          variants[variant],
           className
         )}
         role="table"
-        {...props} 
+        {...props}
       >
         {children}
       </table>
@@ -43,21 +43,21 @@ const Table = ({
 
 /**
  * Table header component for column headers
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Header content
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} TableHeader component
  */
-const TableHeader = ({ 
-  children, 
-  className = '', 
-  ...props 
+const TableHeader = ({
+  children,
+  className = '',
+  ...props
 }) => (
-  <thead 
-    className={cn("bg-gray-50 dark:bg-gray-800", className)} 
+  <thead
+    className={cn("bg-gray-50", className)}
     role="rowgroup"
-    {...props} 
+    {...props}
   >
     {children}
   </thead>
@@ -65,32 +65,32 @@ const TableHeader = ({
 
 /**
  * Table body component for table content
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Body content
  * @param {string} props.className - Additional CSS classes
  * @param {boolean} props.loading - Whether the table is loading data
  * @returns {JSX.Element} TableBody component
  */
-const TableBody = ({ 
-  children, 
-  className = '', 
-  loading = false, 
-  ...props 
+const TableBody = ({
+  children,
+  className = '',
+  loading = false,
+  ...props
 }) => (
-  <tbody 
-    className={cn("relative", className)} 
+  <tbody
+    className={cn("relative", className)}
     role="rowgroup"
-    {...props} 
+    {...props}
   >
     {loading && (
-      <tr className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80">
+      <tr className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80">
         <td className="text-center p-4">
           <div className="inline-flex items-center">
-            <svg 
-              className="animate-spin -ml-1 mr-2 h-5 w-5 text-primary-500" 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
+            <svg
+              className="animate-spin -ml-1 mr-2 h-5 w-5 text-primary-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
@@ -108,24 +108,24 @@ const TableBody = ({
 
 /**
  * Table footer component
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Footer content
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} TableFooter component
  */
-const TableFooter = ({ 
-  children, 
-  className = '', 
-  ...props 
+const TableFooter = ({
+  children,
+  className = '',
+  ...props
 }) => (
-  <tfoot 
+  <tfoot
     className={cn(
-      "bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700", 
+      "bg-gray-50 border-t border-gray-200",
       className
     )}
-    role="rowgroup" 
-    {...props} 
+    role="rowgroup"
+    {...props}
   >
     {children}
   </tfoot>
@@ -133,7 +133,7 @@ const TableFooter = ({
 
 /**
  * Table row component
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Row content
  * @param {string} props.className - Additional CSS classes
@@ -142,28 +142,28 @@ const TableFooter = ({
  * @param {boolean} props.interactive - Whether the row is clickable
  * @returns {JSX.Element} TableRow component
  */
-const TableRow = ({ 
-  children, 
-  className = '', 
-  selected = false, 
-  disabled = false, 
-  interactive = false, 
-  ...props 
+const TableRow = ({
+  children,
+  className = '',
+  selected = false,
+  disabled = false,
+  interactive = false,
+  ...props
 }) => (
-  <tr 
+  <tr
     className={cn(
-      "border-b dark:border-gray-700 transition-colors duration-150",
+      "border-b transition-colors duration-150",
       interactive && "cursor-pointer",
-      selected 
-        ? "bg-primary-50 dark:bg-primary-900" 
-        : "hover:bg-gray-50 dark:hover:bg-gray-800",
+      selected
+        ? "bg-primary-50"
+        : "hover:bg-gray-50",
       disabled && "opacity-50 cursor-not-allowed",
       className
     )}
     aria-selected={selected}
     aria-disabled={disabled}
     role="row"
-    {...props} 
+    {...props}
   >
     {children}
   </tr>
@@ -171,7 +171,7 @@ const TableRow = ({
 
 /**
  * Table head component for column headers
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Header cell content
  * @param {string} props.className - Additional CSS classes
@@ -179,17 +179,17 @@ const TableRow = ({
  * @param {'ascending'|'descending'|'none'} props.sortDirection - Sort direction
  * @returns {JSX.Element} TableHead component
  */
-const TableHead = ({ 
-  children, 
-  className = '', 
-  sorted = false, 
-  sortDirection = 'none', 
-  ...props 
+const TableHead = ({
+  children,
+  className = '',
+  sorted = false,
+  sortDirection = 'none',
+  ...props
 }) => (
   <th
     className={cn(
-      "text-left p-3 font-medium text-gray-700 dark:text-gray-300",
-      sorted && "bg-gray-100 dark:bg-gray-700",
+      "text-left p-3 font-medium text-gray-700",
+      sorted && "bg-gray-100",
       className
     )}
     aria-sort={sorted ? sortDirection : undefined}
@@ -210,19 +210,19 @@ const TableHead = ({
 
 /**
  * Table cell component
- * 
+ *
  * @param {Object} props - Component props
  * @param {React.ReactNode} props.children - Cell content
  * @param {string} props.className - Additional CSS classes
  * @returns {JSX.Element} TableCell component
  */
-const TableCell = ({ 
-  children, 
-  className = '', 
-  ...props 
+const TableCell = ({
+  children,
+  className = '',
+  ...props
 }) => (
   <td
-    className={cn("p-3 text-gray-900 dark:text-gray-100", className)}
+    className={cn("p-3 text-gray-900", className)}
     role="cell"
     {...props}
   >

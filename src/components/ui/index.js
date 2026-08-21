@@ -23,7 +23,6 @@ export { default as StepNavigation } from './organisms/StepNavigation';
 export { default as Layout } from './templates/Layout';
 
 // Utils - Non-visual utilities
-export { default as ThemeProvider, ThemeToggle, useTheme } from './utils/ThemeProvider';
 export { default as ErrorBoundary } from './utils/ErrorBoundary';
 
 // Utility functions

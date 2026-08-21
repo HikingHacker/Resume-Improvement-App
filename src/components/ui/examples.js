@@ -11,7 +11,7 @@ import {
   SkeletonText,
   Badge,
   Tooltip,
-  
+
   // Molecules
   Card,
   CardHeader,
@@ -26,22 +26,20 @@ import {
   TableHead,
   TableCell,
   ConfirmationModal,
-  
+
   // Organisms
   StepNavigation,
-  
+
   // Templates
   Layout,
   
   // Utils
-  ThemeProvider,
-  ThemeToggle,
   ErrorBoundary,
-  
+
   // Utility functions
   cn,
   generateId,
-  
+
   // Constants
   VARIANTS
 } from './index';
@@ -67,24 +65,24 @@ export const FormExample = () => {
     email: '',
     message: ''
   });
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Form submitted:', formData);
   };
-  
+
   return (
     <Card className="max-w-md mx-auto">
       <CardHeader>
         <CardTitle>Contact Form</CardTitle>
         <CardDescription>Fill out this form to contact us</CardDescription>
       </CardHeader>
-      
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -94,7 +92,7 @@ export const FormExample = () => {
             onChange={handleChange}
             required
           />
-          
+
           <Input
             label="Email"
             name="email"
@@ -103,7 +101,7 @@ export const FormExample = () => {
             onChange={handleChange}
             required
           />
-          
+
           <Textarea
             label="Message"
             name="message"
@@ -114,7 +112,7 @@ export const FormExample = () => {
           />
         </form>
       </CardContent>
-      
+
       <CardFooter>
         <Button variant="ghost">Cancel</Button>
         <Button type="submit">Submit</Button>
@@ -130,7 +128,7 @@ export const TableExample = () => {
     { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'Inactive' },
     { id: 3, name: 'Bob Johnson', email: 'bob@example.com', status: 'Pending' },
   ];
-  
+
   return (
     <Table variant="striped">
       <TableHeader>
@@ -148,9 +146,9 @@ export const TableExample = () => {
             <TableCell>{row.name}</TableCell>
             <TableCell>{row.email}</TableCell>
             <TableCell>
-              <Badge 
+              <Badge
                 variant={
-                  row.status === 'Active' ? 'success' : 
+                  row.status === 'Active' ? 'success' :
                   row.status === 'Inactive' ? 'danger' : 'warning'
                 }
               >
@@ -167,18 +165,18 @@ export const TableExample = () => {
 // Example of step navigation
 export const StepNavigationExample = () => {
   const [currentStep, setCurrentStep] = useState(1);
-  
+
   const steps = [
     { value: 1, label: 'Upload' },
     { value: 2, label: 'Analyze' },
     { value: 3, label: 'Improve' },
     { value: 4, label: 'Review' },
   ];
-  
+
   const isStepCompleted = (step) => {
     return step < currentStep;
   };
-  
+
   return (
     <StepNavigation
       currentStep={currentStep}
@@ -202,13 +200,13 @@ export const TooltipExample = () => (
 // Example of a confirmation modal
 export const ConfirmationModalExample = () => {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   return (
     <>
       <Button variant="danger" onClick={() => setIsOpen(true)}>
         Delete Item
       </Button>
-      
+
       <ConfirmationModal
         isOpen={isOpen}
         title="Confirm Deletion"
@@ -227,43 +225,41 @@ export const ConfirmationModalExample = () => {
 
 // Complete application example with layout
 export const ApplicationExample = () => (
-  <ThemeProvider>
-    <ErrorBoundary>
-      <Layout>
-        <div className="space-y-8">
-          <h1 className="text-2xl font-bold">UI Components</h1>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Buttons</h2>
-            <ButtonExample />
-          </section>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Form</h2>
-            <FormExample />
-          </section>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Table</h2>
-            <TableExample />
-          </section>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Step Navigation</h2>
-            <StepNavigationExample />
-          </section>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Modal</h2>
-            <ConfirmationModalExample />
-          </section>
-          
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Tooltip</h2>
-            <TooltipExample />
-          </section>
-        </div>
-      </Layout>
-    </ErrorBoundary>
-  </ThemeProvider>
+  <ErrorBoundary>
+    <Layout>
+      <div className="space-y-8">
+        <h1 className="text-2xl font-bold">UI Components</h1>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Buttons</h2>
+          <ButtonExample />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Form</h2>
+          <FormExample />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Table</h2>
+          <TableExample />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Step Navigation</h2>
+          <StepNavigationExample />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Modal</h2>
+          <ConfirmationModalExample />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Tooltip</h2>
+          <TooltipExample />
+        </section>
+      </div>
+    </Layout>
+  </ErrorBoundary>
 );

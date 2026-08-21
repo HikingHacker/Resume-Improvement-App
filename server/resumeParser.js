@@ -3,6 +3,8 @@
  * @type {module}
  */
 
+const { RESUME_PARSER_SYSTEM_PROMPT } = require('./prompts');
+
 /**
  * Extract bullet points from plain text when JSON parsing fails
  * @param {string} text - The text to extract bullet points from
@@ -69,6 +71,43 @@ function extractBulletPointsFromText(text) {
 }
 
 /**
+ * Extract the first balanced `{...}` object from text, ignoring braces inside strings.
+ * @param {string} text
+ * @returns {string|null}
+ */
+function extractBalancedJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (c === '{') depth += 1;
+    else if (c === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+
+  return text.slice(start).replace(/```\s*$/, '').trim();
+}
+
+/**
  * Strip markdown fences and return the JSON-looking portion of a model response.
  * @param {string} response
  * @returns {string|null}
@@ -76,11 +115,10 @@ function extractBulletPointsFromText(text) {
 function extractJsonCandidate(response) {
   if (!response) return null;
 
-  const fenced = response.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = (fenced ? fenced[1] : response).trim();
-  const start = candidate.indexOf('{');
-  if (start === -1) return null;
-  return candidate.slice(start).replace(/```\s*$/, '').trim();
+  const source = String(response);
+  const fenced = source.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced ? fenced[1] : source).trim();
+  return extractBalancedJsonObject(candidate);
 }
 
 /**
@@ -257,9 +295,23 @@ function processBulletPointResponse(response) {
       console.error('Missing expected structure. Keys found:', Object.keys(parsedData));
       return fallbackBulletPointResult(response, "Used fallback parsing method after unexpected JSON structure");
     }
+
+    const skills = Array.isArray(parsedData.skills)
+      ? parsedData.skills.map((skill) => String(skill || '').trim()).filter(Boolean)
+      : [];
+    const education = Array.isArray(parsedData.education)
+      ? parsedData.education.map((entry) => ({
+          school: (entry && entry.school) || '',
+          degree: (entry && entry.degree) || '',
+          time_period: (entry && entry.time_period) || '',
+        })).filter((entry) => entry.school || entry.degree)
+      : [];
     
     // Clean up the parsed data to ensure consistent formatting
     const cleanedData = {
+      summary: typeof parsedData.summary === 'string' ? parsedData.summary.trim() : '',
+      skills,
+      education,
       bullet_points: parsedData.bullet_points.map(section => ({
         company: (section && section.company) || "Unknown Company",
         position: (section && section.position) || "Unknown Position",
@@ -298,55 +350,16 @@ function processBulletPointResponse(response) {
   }
 }
 
-// Resume parsing system prompt
-const RESUME_SYSTEM_PROMPT = `
-You are an expert resume parser specializing in comprehensive extraction of professional achievements. 
-
-Your task:
-
-1. Extract ALL bullet points from EVERY job position listed in the experience section of the resume
-
-2. Maintain the exact wording and formatting of each bullet point
-
-3. Include the company name and job title as context for each bullet point
-
-4. Preserve numerical achievements, metrics, and percentages
-
-5. Ensure no bullet points are missed, even from older positions or internships
-
-6. Capture technical skills, tools, and technologies mentioned within each bullet
-
-Return ONLY a JSON object with the following structure:
-
-{
-  "bullet_points": [
-    {
-      "company": "Company Name",
-      "position": "Job Title",
-      "time_period": "Date Range (if available)",
-      "achievements": [
-        "Full text of bullet point 1",
-        "Full text of bullet point 2",
-        "..."
-      ]
-    },
-    {
-      "company": "Previous Company",
-      "position": "Previous Job Title",
-      "time_period": "Previous Date Range (if available)",
-      "achievements": [
-        "Full text of bullet point 1",
-        "..."
-      ]
-    }
-  ]
+function parseJsonFromModelResponse(response) {
+  const jsonString = extractJsonCandidate(response);
+  if (!jsonString) return null;
+  return tryParseJson(jsonString) || tryParseJson(repairTruncatedJson(jsonString));
 }
-
-Do not include any explanations, summaries, or additional text outside of the JSON response.
-`;
 
 module.exports = {
   extractBulletPointsFromText,
   processBulletPointResponse,
-  RESUME_SYSTEM_PROMPT
+  parseJsonFromModelResponse,
+  extractJsonCandidate,
+  RESUME_SYSTEM_PROMPT: RESUME_PARSER_SYSTEM_PROMPT
 };

@@ -9,7 +9,20 @@ const { parsePDF } = require('./pdfHelper');
 
 // Import resume parsing utilities
 const resumeParser = require('./resumeParser');
-const { processBulletPointResponse, RESUME_SYSTEM_PROMPT } = resumeParser;
+const {
+  processBulletPointResponse,
+  parseJsonFromModelResponse,
+  RESUME_SYSTEM_PROMPT
+} = resumeParser;
+const prompts = require('./prompts');
+const {
+  modelOmitsSamplingParams,
+  extractClaudeText,
+  summarizeClaudeError,
+  buildClaudeMessagesBody,
+  formatBulletImprovement,
+  formatBulletDetails,
+} = require('./claudeUtils');
 
 // Initialize environment variables
 dotenv.config();
@@ -85,6 +98,8 @@ const CLAUDE_CONFIG = {
   temperature: 0.7,
 };
 
+let omitSamplingParams = modelOmitsSamplingParams(CLAUDE_CONFIG.model);
+
 /**
  * Makes a request to Claude API with proper error handling, backoff, and status tracking
  */
@@ -150,14 +165,14 @@ async function callClaudeAPI(options) {
             'x-api-key': CLAUDE_CONFIG.apiKey,
             'anthropic-version': CLAUDE_CONFIG.apiVersion,
           },
-          body: JSON.stringify({
+          body: JSON.stringify(buildClaudeMessagesBody({
             model: CLAUDE_CONFIG.model,
-            max_tokens: maxTokens,
+            maxTokens,
             system: systemPrompt,
-            messages: [
-              { role: 'user', content: prompt }
-            ]
-          }),
+            prompt,
+            temperature,
+            omitSamplingParams,
+          })),
           signal: controller.signal
         });
         
@@ -175,10 +190,17 @@ async function callClaudeAPI(options) {
           
           // Handle different error types with specific retry logic
           const status = response.status;
+          const claudeMessage = summarizeClaudeError(errorText);
+
+          if (status === 400 && /temperature|top_p|top_k/i.test(errorText) && !omitSamplingParams) {
+            console.warn(`[${requestId}] Model rejected sampling params; retrying without temperature`);
+            omitSamplingParams = true;
+            continue;
+          }
           
           // Don't retry certain errors
           if (status === 400 || status === 401 || status === 403) {
-            throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+            throw new Error(`Claude API returned error: ${status} ${claudeMessage || response.statusText}`);
           }
           
           // For server errors and rate limits, retry with backoff
@@ -208,7 +230,7 @@ async function callClaudeAPI(options) {
             continue;
           }
           
-          throw new Error(`Claude API returned error: ${status} ${response.statusText}`);
+          throw new Error(`Claude API returned error: ${status} ${claudeMessage || response.statusText}`);
         }
 
         // Update request status
@@ -223,6 +245,16 @@ async function callClaudeAPI(options) {
           console.warn(`[${requestId}] Claude response truncated (stop_reason=max_tokens)`);
         }
         
+        const text = extractClaudeText(data);
+        if (!text) {
+          console.error(`[${requestId}] Empty Claude content.`, {
+            stop_reason: data?.stop_reason,
+            keys: Object.keys(data || {}),
+            contentPreview: JSON.stringify(data?.content)?.slice(0, 500),
+          });
+          throw new Error('Claude returned an empty response');
+        }
+
         // Request succeeded
         updateRequestStatus(requestId, {
           status: 'completed',
@@ -230,7 +262,7 @@ async function callClaudeAPI(options) {
           lastUpdated: Date.now()
         });
         
-        return data.content[0].text;
+        return text;
       } catch (error) {
         // If this is an abort error, it's a timeout
         if (error.name === 'AbortError') {
@@ -282,7 +314,7 @@ async function callClaudeAPI(options) {
       lastUpdated: Date.now()
     });
     
-    throw new Error('Failed to get response from Claude. Please try again later.');
+    throw error;
   }
 };
 
@@ -307,75 +339,105 @@ function isRetryableError(error) {
   if (error.name === 'AbortError' || error.name === 'TimeoutError') {
     return true;
   }
-  
-  // Check for server errors in the message (5xx)
-  if (error.message && error.message.includes('500')) {
+
+  const message = error.message || '';
+  if (message.includes('500') || message.includes('429')) {
     return true;
   }
-  
-  // Check for rate limit errors
-  if (error.message && error.message.includes('429')) {
+  if (message.includes('empty response')) {
     return true;
   }
   
   return false;
 }
 
+function isJsonRetryableError(error) {
+  const message = error.message || '';
+  return /parse json/i.test(message) || /empty response/i.test(message);
+}
+
+async function requestBulletRewrite({ prompt, systemPrompt, temperature, failureMessage, attempts = 2 }) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await callClaudeAPI({ prompt, systemPrompt, temperature });
+      const parsedResponse = parseJsonFromModelResponse(response);
+      if (!parsedResponse) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+
+      const result = formatBulletImprovement(parsedResponse);
+      if (!result.improvedBulletPoint) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`Error rewriting bullet (attempt ${attempt}/${attempts}):`, error);
+      if (attempt === attempts || !isJsonRetryableError(error)) {
+        throw new Error(error.message || failureMessage);
+      }
+    }
+  }
+  throw new Error(lastError?.message || failureMessage);
+}
+
 /**
  * Improves a resume bullet point using Claude AI
  */
 async function improveBulletPoint(bulletPoint, additionalContext = '') {
-  const systemPrompt = `
-    You are an expert resume writer who helps professionals improve their resume bullet points.
-    Your task is to enhance the given bullet point by:
-    1. Using stronger action verbs
-    2. Highlighting quantifiable achievements
-    3. Focusing on impact and results
-    4. Making technical skills and technologies stand out
-    5. Ensuring conciseness (ideally under 2 lines)
-    
-    Respond with ONLY a JSON object containing the following fields:
-    - multipleSuggestions: An array of 3 distinct improved versions of the bullet point, each offering a different approach or emphasis
-    - reasoning: Brief explanation of the improvements you made and how each variation differs
-    - remainingWeaknesses: One or two specific areas where the bullet point could still be improved (be specific and constructive)
-    - followUpQuestions: An array of 3 questions to elicit more information that could address the remaining weaknesses
-  `;
+  return requestBulletRewrite({
+    prompt: prompts.getBulletImprovementPrompt(bulletPoint, additionalContext),
+    systemPrompt: prompts.BULLET_IMPROVEMENT_SYSTEM_PROMPT,
+    temperature: 0.7,
+    failureMessage: 'Failed to improve the bullet point. Please try again.',
+  });
+}
 
-  const prompt = `
-    Original Bullet Point: "${bulletPoint}"
-    
-    ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
-    
-    Please provide three different improved versions of this resume bullet point, each with a slightly different emphasis or approach. Make all versions impactful and professional.
-  `;
-
-  try {
-    const response = await callClaudeAPI({
-      prompt,
-      systemPrompt,
-      temperature: 0.7, // Slightly higher temperature for more variety
-    });
-
-    // Extract JSON from the response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse JSON response from Claude');
+/**
+ * Asks follow-up questions so the candidate can add facts before a rewrite.
+ */
+async function gatherBulletDetails(bulletPoint, additionalContext = '') {
+  let lastError;
+  const attempts = 2;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await callClaudeAPI({
+        prompt: prompts.getBulletDetailsPrompt(bulletPoint, additionalContext),
+        systemPrompt: prompts.BULLET_DETAILS_SYSTEM_PROMPT,
+        temperature: 0.4,
+      });
+      const parsedResponse = parseJsonFromModelResponse(response);
+      if (!parsedResponse) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+      const result = formatBulletDetails(parsedResponse);
+      if (!result.followUpQuestions.length) {
+        throw new Error('Failed to parse JSON response from Claude');
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`Error gathering bullet details (attempt ${attempt}/${attempts}):`, error);
+      if (attempt === attempts || !isJsonRetryableError(error)) {
+        throw new Error(error.message || 'Failed to generate follow-up questions. Please try again.');
+      }
     }
-
-    const parsedResponse = JSON.parse(jsonMatch[0]);
-    
-    return {
-      success: true,
-      multipleSuggestions: parsedResponse.multipleSuggestions || [],
-      improvedBulletPoint: parsedResponse.multipleSuggestions ? parsedResponse.multipleSuggestions[0] : parsedResponse.improvedBulletPoint,
-      reasoning: parsedResponse.reasoning,
-      remainingWeaknesses: parsedResponse.remainingWeaknesses || "No specific weaknesses identified.",
-      followUpQuestions: parsedResponse.followUpQuestions
-    };
-  } catch (error) {
-    console.error('Error improving bullet point:', error);
-    throw new Error('Failed to improve the bullet point. Please try again.');
   }
+  throw new Error(lastError?.message || 'Failed to generate follow-up questions. Please try again.');
+}
+
+/**
+ * Drafts new skill bullets with placeholders for the user to fill in.
+ */
+async function generateSkillBullet({ skillName, skillRecommendation, jobDetails, selectedKeywords, additionalContext = '' } = {}) {
+  const extra = additionalContext ? `\n\nUser notes:\n${additionalContext}` : '';
+  return requestBulletRewrite({
+    prompt: `${prompts.getSkillBulletPrompt(skillName, skillRecommendation, jobDetails, selectedKeywords)}${extra}`,
+    systemPrompt: prompts.SKILL_BULLET_SYSTEM_PROMPT,
+    temperature: 0.7,
+    failureMessage: 'Failed to generate the skill bullet. Please try again.',
+  });
 }
 
 // Resume parsing utilities moved to resumeParser.js
@@ -551,7 +613,7 @@ async function processParseSampleRequest(requestId, resumeText) {
   try {
     // Get response from Claude API with simplified parsing
     const response = await callClaudeAPI({
-      prompt: resumeText,
+      prompt: prompts.getResumeParserPrompt(resumeText),
       systemPrompt: RESUME_SYSTEM_PROMPT,
       temperature: 0.2,
       requestId // Pass the request ID for tracking
@@ -610,16 +672,33 @@ app.post('/api/debug', (req, res) => {
 // Endpoint to improve a bullet point
 app.post('/api/v1/resume/improve', async (req, res) => {
   try {
-    const { bulletPoint, additionalContext = '' } = req.body;
+    const { bulletPoint, additionalContext = '', task, skillName, skillRecommendation, jobDetails, selectedKeywords } = req.body;
     
-    if (!bulletPoint) {
+    if (task === 'skill' && !skillName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Skill name is required'
+      });
+    }
+
+    if (task !== 'skill' && !bulletPoint) {
       return res.status(400).json({ 
         success: false, 
         message: 'Bullet point is required' 
       });
     }
     
-    const result = await improveBulletPoint(bulletPoint, additionalContext);
+    const result = task === 'skill'
+      ? await generateSkillBullet({
+          skillName,
+          skillRecommendation,
+          jobDetails,
+          selectedKeywords,
+          additionalContext,
+        })
+      : task === 'details'
+        ? await gatherBulletDetails(bulletPoint, additionalContext)
+        : await improveBulletPoint(bulletPoint, additionalContext);
     res.json(result);
   } catch (error) {
     console.error('Error in improve endpoint:', error);
@@ -643,7 +722,7 @@ app.get('/api/v1/resume/parse/test', async (req, res) => {
     
     // Get response from Claude API
     const response = await callClaudeAPI({
-      prompt: resumeText,
+      prompt: prompts.getResumeParserPrompt(resumeText),
       systemPrompt: RESUME_SYSTEM_PROMPT,
       temperature: 0.2,
     });
@@ -798,7 +877,10 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
         
         try {
           // Add context to let Claude know this is a partial resume
-          const chunkPrompt = `PARTIAL RESUME (SECTION ${i+1} OF ${chunks.length}):\n\n${chunks[i]}`;
+          const chunkPrompt = prompts.getResumeParserPrompt(chunks[i], {
+            chunkIndex: i,
+            chunkCount: chunks.length,
+          });
           
           // If this isn't the first chunk, add a small delay to avoid rate limits
           if (i > 0) {
@@ -826,7 +908,7 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
       // For smaller resumes, process normally
       console.log('Resume size is manageable, processing in one API call');
       response = await callClaudeAPI({
-        prompt: resumeText,
+        prompt: prompts.getResumeParserPrompt(resumeText),
         systemPrompt: RESUME_SYSTEM_PROMPT,
         temperature: 0.2,
         maxTokens: 8192,
@@ -860,7 +942,7 @@ app.post('/api/v1/resume/parse', upload.single('resume'), async (req, res) => {
 // Endpoint to perform comprehensive resume analysis with Claude AI
 app.post('/api/v1/resume/analyze', async (req, res) => {
   try {
-    const { resumeData } = req.body;
+    const { resumeData, targetRole = '', jobDescriptions = [] } = req.body;
     
     if (!resumeData || !resumeData.bullet_points || !Array.isArray(resumeData.bullet_points)) {
       return res.status(400).json({ 
@@ -883,7 +965,7 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
     });
     
     // Process the request asynchronously
-    processResumeAnalysis(requestId, resumeData).catch(error => {
+    processResumeAnalysis(requestId, resumeData, { targetRole, jobDescriptions }).catch(error => {
       console.error(`[${requestId}] Unhandled error in async analysis:`, error);
     });
   } catch (error) {
@@ -898,7 +980,7 @@ app.post('/api/v1/resume/analyze', async (req, res) => {
 /**
  * Process resume analysis asynchronously
  */
-async function processResumeAnalysis(requestId, resumeData) {
+async function processResumeAnalysis(requestId, resumeData, { targetRole = '', jobDescriptions = [] } = {}) {
   try {
     // Create initial status
     const requestStatus = {
@@ -913,74 +995,8 @@ async function processResumeAnalysis(requestId, resumeData) {
     // Store the request status
     requestStatusMap.set(requestId, requestStatus);
     
-    // Prepare the resume data in a format that Claude can analyze
-    let formattedResume = '';
-    
-    // Add job positions and their bullet points
-    resumeData.bullet_points.forEach((job, index) => {
-      formattedResume += `POSITION ${index + 1}: ${job.position || 'Unknown Position'} at ${job.company || 'Unknown Company'}`;
-      if (job.time_period) {
-        formattedResume += ` (${job.time_period})`;
-      }
-      formattedResume += '\n\n';
-      
-      // Add bullet points
-      if (job.achievements && job.achievements.length > 0) {
-        job.achievements.forEach(bullet => {
-          formattedResume += `• ${bullet}\n`;
-        });
-        formattedResume += '\n';
-      }
-    });
-    
-    console.log(`[${requestId}] Formatted resume for analysis, length:`, formattedResume.length);
+    console.log(`[${requestId}] Formatted resume for analysis`);
     updateRequestStatus(requestId, { status: 'formatted', progress: 20 });
-    
-    // Define system prompt for resume analysis
-    const ANALYSIS_SYSTEM_PROMPT = `
-      You are an expert resume reviewer and career advisor who provides comprehensive analysis of resumes.
-      Your task is to analyze the given resume and provide detailed feedback in the following areas:
-      
-      1. Strengths - Identify 3-5 key strengths of the resume
-      2. Weaknesses - Identify 3-5 areas for improvement
-      3. Areas for Improvement - Provide 3-5 specific, actionable recommendations
-      4. Missing Skills - Identify 3-5 skills that would enhance the candidate's profile
-      5. Recommended Roles - Suggest 3-5 job roles that match their experience and skills
-      6. Top Industries - List 3-6 industries where their skills are in demand, with match rating (High/Medium/Low) and key skills for each
-      7. Companies to Apply To - Suggest both major companies (10) and promising growth companies (10) that would be good fits
-      8. ATS Keyword Optimization - Identify keywords that are likely used in ATS systems for the candidate's target roles. Include 5-12 keywords already present in the resume, and 8-15 important keywords that should be added
-      
-      Your response MUST be in valid JSON format with these exact keys:
-      {
-        "strengths": ["strength1", "strength2", ...],
-        "weaknesses": ["weakness1", "weakness2", ...],
-        "areasForImprovement": ["improvement1", "improvement2", ...],
-        "missingSkills": ["skill1", "skill2", ...],
-        "recommendedRoles": ["role1", "role2", ...],
-        "topIndustries": [
-          {"name": "industry1", "match": "High/Medium/Low", "keySkills": ["skill1", "skill2", ...]},
-          ...
-        ],
-        "companies": {
-          "major": ["company1", "company2", ...],
-          "promising": ["company1", "company2", ...]
-        },
-        "atsKeywords": [
-          {"keyword": "keyword1", "present": true/false, "priority": "High/Medium/Low"},
-          {"keyword": "keyword2", "present": true/false, "priority": "High/Medium/Low"},
-          ...
-        ]
-      }
-      
-      Only return the JSON object, nothing else. Ensure the JSON is valid and properly formatted.
-    `;
-    
-    // User prompt for Claude
-    const analysisPrompt = `
-      Please analyze the following resume and provide a comprehensive feedback:
-      
-      ${formattedResume}
-    `;
     
     // Update status before calling Claude API
     updateRequestStatus(requestId, { status: 'analyzing', progress: 30 });
@@ -988,26 +1004,27 @@ async function processResumeAnalysis(requestId, resumeData) {
     
     // Call Claude API with request ID for tracking
     const response = await callClaudeAPI({
-      prompt: analysisPrompt,
-      systemPrompt: ANALYSIS_SYSTEM_PROMPT,
+      prompt: prompts.getResumeAnalysisPrompt(resumeData, { targetRole, jobDescriptions }),
+      systemPrompt: prompts.RESUME_ANALYSIS_SYSTEM_PROMPT,
       temperature: 0.5,
       maxTokens: 8192,
       requestId // Pass the request ID for tracking
     });
     
+    if (!response) {
+      throw new Error('Claude returned an empty analysis response');
+    }
+
     // Update status after receiving Claude's response
     console.log(`[${requestId}] Claude response received, length:`, response.length);
     updateRequestStatus(requestId, { status: 'processing', progress: 70 });
     
     // Parse the JSON response
     try {
-      // Extract JSON from the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      const analysisResult = parseJsonFromModelResponse(response);
+      if (!analysisResult) {
         throw new Error('Failed to parse JSON response from Claude');
       }
-      
-      const analysisResult = JSON.parse(jsonMatch[0]);
       console.log(`[${requestId}] Successfully parsed JSON response`);
       
       // Add success flag to the response
@@ -1045,7 +1062,7 @@ async function processResumeAnalysis(requestId, resumeData) {
 // Endpoint to get AI-powered improvement recommendations
 app.post('/api/v1/resume/improvement-analytics', async (req, res) => {
   try {
-    const { resumeData, improvements, savedBullets } = req.body;
+    const { resumeData, improvements, savedBullets, targetRole = '', jobDescriptions = [] } = req.body;
     
     if (!resumeData || !resumeData.bullet_points || !Array.isArray(resumeData.bullet_points)) {
       return res.status(400).json({ 
@@ -1059,128 +1076,30 @@ app.post('/api/v1/resume/improvement-analytics', async (req, res) => {
     console.log('Improvements object contains', Object.keys(improvements || {}).length, 'improved bullets');
     console.log('SavedBullets object contains', Object.keys(savedBullets || {}).length, 'saved bullets');
     
-    // Prepare the resume data in a format that Claude can analyze
-    let formattedResume = '';
-    let formattedImprovements = '';
-    
-    // Add job positions and their bullet points
-    resumeData.bullet_points.forEach((job, jobIndex) => {
-      formattedResume += `POSITION: ${job.position || 'Unknown Position'} at ${job.company || 'Unknown Company'}`;
-      if (job.time_period) {
-        formattedResume += ` (${job.time_period})`;
-      }
-      formattedResume += '\n\n';
-      
-      // Add bullet points
-      if (job.achievements && job.achievements.length > 0) {
-        job.achievements.forEach((bullet, bulletIndex) => {
-          const bulletId = `job${jobIndex}-bullet${bulletIndex}`;
-          const isSaved = savedBullets && savedBullets[bulletId];
-          const improvement = improvements && improvements[bulletId];
-          
-          formattedResume += `• ${bullet}\n`;
-          
-          // If this bullet has been improved and saved, add it to the improvements section
-          if (isSaved && improvement && improvement.improvedBulletPoint) {
-            formattedImprovements += `ORIGINAL: ${bullet}\n`;
-            formattedImprovements += `IMPROVED: ${improvement.improvedBulletPoint}\n\n`;
-          }
-        });
-        formattedResume += '\n';
-      }
-    });
-    
-    console.log('Formatted resume for analysis, length:', formattedResume.length);
-    console.log('Formatted improvements for analysis, length:', formattedImprovements.length);
-    
-    // Define system prompt for resume improvement analytics
-    const ANALYTICS_SYSTEM_PROMPT = `
-      You are an expert resume improvement analyst who provides detailed insights on resume enhancements.
-      The user has already improved several bullet points on their resume using AI assistance.
-      Your task is to analyze both their original resume and the improvements they've made, then provide actionable recommendations.
-      
-      Analyze the improvements in these areas:
-      1. What types of improvements were made (stronger verbs, quantifiable results, technical details, etc.)
-      2. What high-value skills/concepts are still missing from the resume
-      3. Patterns in the improvements that could be applied to other parts of the resume
-      4. Strategic recommendations for further enhancing the resume
-      
-      Your response MUST be in valid JSON format with these exact keys:
-      {
-        "generalImprovements": [
-          "actionable recommendation 1", 
-          "actionable recommendation 2",
-          ...
-        ],
-        "missingConcepts": [
-          {
-            "category": "Leadership & Management",
-            "skills": [
-              {
-                "name": "Mentorship & Team Development",
-                "recommendation": "Add examples of how you've mentored team members, provided training, or helped colleagues develop new skills."
-              },
-              ...
-            ]
-          },
-          {
-            "category": "Process Excellence & Innovation",
-            "skills": [...] 
-          },
-          {
-            "category": "Business Impact & Value Creation", 
-            "skills": [...]
-          },
-          {
-            "category": "Technical & Domain Expertise",
-            "skills": [...]
-          }
-        ],
-        "aiInsights": [
-          "strategic insight 1",
-          "strategic insight 2",
-          ...
-        ]
-      }
-      
-      Each missing concept category should include 2-4 skills.
-      Only return the JSON object, nothing else. Ensure the JSON is valid and properly formatted.
-    `;
-    
-    // User prompt for Claude
-    const analyticsPrompt = `
-      Please analyze the following resume and the improvements that have been made to some bullet points:
-      
-      ORIGINAL RESUME:
-      ${formattedResume}
-      
-      IMPROVED BULLET POINTS:
-      ${formattedImprovements}
-      
-      Based on the improvements made so far, provide recommendations for additional improvements 
-      and identify missing high-value skills or concepts that would make this resume even stronger.
-    `;
-    
     // Call Claude API
     console.log('Calling Claude API for resume improvement analytics...');
     const response = await callClaudeAPI({
-      prompt: analyticsPrompt,
-      systemPrompt: ANALYTICS_SYSTEM_PROMPT,
+      prompt: prompts.getImprovementAnalyticsPrompt(resumeData, improvements, savedBullets, {
+        targetRole,
+        jobDescriptions,
+      }),
+      systemPrompt: prompts.ANALYTICS_SYSTEM_PROMPT,
       temperature: 0.5,
       maxTokens: 8192,
     });
+
+    if (!response) {
+      throw new Error('Claude returned an empty analytics response');
+    }
     
-    console.log('Claude response received (first 200 chars):', response.substring(0, 200));
+    console.log('Claude response received (first 200 chars):', String(response).substring(0, 200));
     
     // Parse the JSON response
     try {
-      // Extract JSON from the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      const analyticsResult = parseJsonFromModelResponse(response);
+      if (!analyticsResult) {
         throw new Error('Failed to parse JSON response from Claude');
       }
-      
-      const analyticsResult = JSON.parse(jsonMatch[0]);
       console.log('Successfully parsed JSON response');
       
       // Add success flag to the response
